@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0066CC"/>
+      <stop offset="100%" stop-color="#00A86B"/>
+    </linearGradient>
+    <clipPath id="clip">
+      <rect width="32" height="32" rx="7"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background -->
+  <rect width="32" height="32" rx="7" fill="url(#bg)"/>
+
+  <!-- Subtle top-left shine -->
+  <ellipse cx="8" cy="6" rx="9" ry="7" fill="white" opacity="0.08"/>
+
+  <!-- Person: head -->
+  <circle cx="16" cy="11" r="4.5" fill="white"/>
+
+  <!-- Person: body / shoulders (clipped to stay inside rounded rect) -->
+  <path d="M7 32c0-4.97 4.03-9 9-9s9 4.03 9 9H7z" fill="white" clip-path="url(#clip)"/>
+
+  <!-- Star badge – evaluation/penilaian -->
+  <circle cx="24.5" cy="22.5" r="5.5" fill="#F59E0B"/>
+  <!-- 5-point star -->
+  <polygon
+    points="24.5,18.5 25.39,21.36 28.4,21.36 26,23.09 26.89,25.95 24.5,24.22 22.11,25.95 23,23.09 20.6,21.36 23.61,21.36"
+    fill="white"/>
+</svg>

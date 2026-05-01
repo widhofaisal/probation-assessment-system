@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
     <title><?= $title ?? 'Sistem Penilaian Probation' ?></title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="shortcut icon" href="/favicon.ico">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -54,8 +56,8 @@
     <aside class="w-64 bg-white shadow-lg hidden md:flex flex-col">
         <div class="p-6 border-b">
             <div class="flex items-center gap-2">
-                <div class="w-10 h-10 bg-gradient-to-br from-blue-600 to-green-600 rounded-lg flex items-center justify-center">
-                    <i class="fas fa-building text-white text-lg"></i>
+                <div class="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+                    <img src="/favicon.svg" alt="Logo" class="w-10 h-10">
                 </div>
                 <div>
                     <h1 class="text-sm font-bold text-gray-900 leading-tight">Sistem Penilaian<br>Probation</h1>
