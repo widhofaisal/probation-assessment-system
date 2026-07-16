@@ -11,8 +11,9 @@ class EvaluationModel extends Model
     protected $useAutoIncrement = true;
     protected $returnType = 'array';
     protected $useSoftDeletes = false;
-    protected $allowedFields = ['employee_id', 'team_leader_id', 'tanggal_penilaian', 'nilai_total',
-                                'status', 'catatan_team_leader',
+    protected $allowedFields = ['employee_id', 'nomor_penilaian', 'team_leader_id', 'tanggal_penilaian',
+                                'tanggal_mulai_penilaian', 'tanggal_selesai_penilaian',
+                                'nilai_total', 'status', 'catatan_team_leader',
                                 'created_at', 'updated_at'];
     protected $useTimestamps = true;
     protected $createdField  = 'created_at';
@@ -37,7 +38,7 @@ class EvaluationModel extends Model
     public function getWithDetails(int $evaluationId)
     {
         return $this->select('penilaian.*, employees.nama, employees.nik, employees.posisi, employees.departemen,
-                             users.nama as team_leader_nama')
+                             employees.mulai_probation, users.nama as team_leader_nama')
             ->join('employees', 'penilaian.employee_id = employees.id')
             ->join('users', 'penilaian.team_leader_id = users.id')
             ->where('penilaian.id', $evaluationId)

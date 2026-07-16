@@ -93,27 +93,35 @@ class EvaluationDetailModel extends Model
     }
 
     /**
-     * Standard evaluation aspects/categories
+     * Standard evaluation aspects/categories (sesuai Form Penilaian Probation)
      */
     public static function getStandardAspects()
     {
         return [
-            'Kinerja & Produktivitas' => [
-                'Kemampuan menyelesaikan tugas tepat waktu',
-                'Kualitas hasil kerja',
-                'Inisiatif dalam bekerja',
-                'Kemampuan problem solving',
+            'A. Pengetahuan Akan Tugas (Knowledge)' => [
+                'Pengetahuan tentang penggunaan & pemeliharaan perangkat kerja (tools) e.g. mesin, komputer dll.',
+                'Mengerti & memahami prosedur kerja standar (SOP) yang harus dijalankan.',
+                'Mengerti & memahami standar kualitas kerja yang diterapkan perusahaan.',
+                'Mengetahui proses pembuatan sepatu secara umum.',
             ],
-            'Kedisiplinan' => [
-                'Kehadiran dan ketepatan waktu',
-                'Kepatuhan terhadap prosedur kerja',
-                'Penggunaan waktu kerja yang efektif',
+            'B. Keahlian Kerja (Technical Skill)' => [
+                'Keahlian dalam menjalankan fungsi kerja utama (e.g. cutting, sewing dll.).',
+                'Mampu mengoperasikan perangkat kerja (tools) e.g. mesin, kuas, lem dll.',
+                'Bekerja sesuai dengan prosedur kerja standar (SOP) dengan benar/secara keseluruhan.',
+                'Bekerja secara cepat & teliti sesuai dengan target (kuantitas dan kualitas).',
+                'Mampu memenuhi standar kualitas kerja yang diterapkan oleh perusahaan.',
+                'Pengelolaan & pemeliharaan perangkat kerja (tools) e.g. mesin, kuas, lem dll.',
             ],
-            'Sikap & Perilaku' => [
-                'Kerjasama dalam tim',
-                'Komunikasi dengan rekan kerja',
-                'Sikap dan etika kerja',
-                'Kemampuan menerima feedback',
+            'C. Sikap Kerja (Attitude)' => [
+                'Mampu menjalankan disiplin kerja yang ada di departemen (e.g. jam kerja, seragam, APD dll.).',
+                'Memiliki sikap dan perilaku kerja yang sesuai dengan NCOC.',
+                'Menunjukkan sikap tidak mudah menyerah dalam menghadapi kesulitan saat bekerja sehari-hari.',
+                'Jujur dalam menjalankan tugasnya.',
+            ],
+            'D. Kemampuan Diri (Interpersonal Skill)' => [
+                'Mampu bersosialisasi & bekerja sama dengan rekan kerja yang lain.',
+                'Berani mengungkapkan pendapat kepada orang lain, baik rekan kerja ataupun atasan.',
+                'Bersedia menerima masukan dan pendapat dari orang lain, baik rekan kerja atau atasan.',
             ],
         ];
     }

@@ -67,6 +67,7 @@ $routes->group('employees', static function ($routes) {
 // ===== EVALUATIONS ROUTES =====
 $routes->group('evaluations', static function ($routes) {
     $routes->get('/', 'EvaluationsController::index');
+    $routes->get('my', 'EvaluationsController::myEvaluations');
     $routes->post('store', 'EvaluationsController::store');
     $routes->get('(:num)', 'EvaluationsController::show/$1');
     $routes->get('(:num)/edit', 'EvaluationsController::edit/$1');
@@ -79,7 +80,7 @@ $routes->group('evaluations', static function ($routes) {
 $routes->group('reports', static function ($routes) {
     $routes->get('evaluation/(:num)', 'ReportsController::view/$1');
     $routes->get('pdf/(:num)', 'ReportsController::generatePdf/$1');
+    $routes->get('pdf-all/(:num)', 'ReportsController::pdfAll/$1');
     $routes->get('export-csv', 'ReportsController::exportCsv');
     $routes->get('export-employees-csv', 'ReportsController::exportEmployeesCsv');
-    $routes->get('audit-trail', 'ReportsController::auditTrail');
 });

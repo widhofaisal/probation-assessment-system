@@ -8,7 +8,7 @@ $deptOptions = ['Human Resources', 'Produksi', 'Quality Control', 'Warehouse', '
 <div class="mb-6 bg-white rounded-xl shadow p-5">
     <div class="flex flex-col md:flex-row gap-3 items-end">
         <div class="flex-1">
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">Cari User</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">Cari Team Leader</label>
             <div class="relative">
                 <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
                 <input type="text" id="searchInput" placeholder="Cari NIK atau nama..."
@@ -16,7 +16,7 @@ $deptOptions = ['Human Resources', 'Produksi', 'Quality Control', 'Warehouse', '
             </div>
         </div>
         <button onclick="openAddModal()" class="flex-shrink-0 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-sm flex items-center gap-2 transition">
-            <i class="fas fa-plus"></i> Tambah User
+            <i class="fas fa-plus"></i> Tambah Team Leader
         </button>
     </div>
 </div>
@@ -36,36 +36,37 @@ $deptOptions = ['Human Resources', 'Produksi', 'Quality Control', 'Warehouse', '
 <!-- Tabel -->
 <div class="bg-white rounded-xl shadow overflow-hidden">
     <div class="px-6 py-4 border-b flex items-center justify-between">
-        <h3 class="text-lg font-bold text-gray-900">Daftar HRD & Team Leader</h3>
+        <h3 class="text-lg font-bold text-gray-900">Daftar Team Leader</h3>
         <span id="rowCount" class="text-sm text-gray-500"></span>
     </div>
     <div class="overflow-x-auto">
         <table class="w-full" id="usersTable">
             <thead>
                 <tr class="bg-gray-50 border-b">
-                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">NIK</th>
-                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Nama</th>
-                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Role</th>
-                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Departemen</th>
-                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Email</th>
-                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Aksi</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">NIK</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Nama</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Departemen</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Posisi</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Jenis Kelamin</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Tgl Lahir</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Email</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Aksi</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if (!empty($users)): ?>
                     <?php foreach ($users as $user): ?>
                         <tr class="border-b hover:bg-gray-50 transition" data-search="<?= strtolower(htmlspecialchars($user['nik'] . ' ' . $user['nama'])) ?>">
-                            <td class="px-6 py-4 text-sm font-mono text-gray-700"><?= htmlspecialchars($user['nik']) ?></td>
-                            <td class="px-6 py-4 font-medium text-gray-900"><?= htmlspecialchars($user['nama']) ?></td>
-                            <td class="px-6 py-4">
-                                <span class="px-2.5 py-1 rounded-full text-xs font-semibold
-                                    <?= $user['role'] === 'hrd' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700' ?>">
-                                    <?= $user['role'] === 'hrd' ? 'HRD' : 'Team Leader' ?>
-                                </span>
+                            <td class="px-4 py-3 text-sm font-mono text-gray-700"><?= htmlspecialchars($user['nik']) ?></td>
+                            <td class="px-4 py-3 font-medium text-gray-900"><?= htmlspecialchars($user['nama']) ?></td>
+                            <td class="px-4 py-3 text-sm text-gray-600"><?= htmlspecialchars($user['departemen'] ?? '-') ?></td>
+                            <td class="px-4 py-3 text-sm text-gray-600"><?= htmlspecialchars($user['posisi'] ?? '-') ?></td>
+                            <td class="px-4 py-3 text-sm text-gray-600"><?= $user['jenis_kelamin'] === 'L' ? 'Laki-laki' : ($user['jenis_kelamin'] === 'P' ? 'Perempuan' : '-') ?></td>
+                            <td class="px-4 py-3 text-sm text-gray-600">
+                                <?= $user['tanggal_lahir'] ? date('d/m/Y', strtotime($user['tanggal_lahir'])) : '-' ?>
                             </td>
-                            <td class="px-6 py-4 text-sm text-gray-600"><?= htmlspecialchars($user['departemen'] ?? '-') ?></td>
-                            <td class="px-6 py-4 text-sm text-gray-600"><?= htmlspecialchars($user['email'] ?? '-') ?></td>
-                            <td class="px-6 py-4">
+                            <td class="px-4 py-3 text-sm text-gray-600"><?= htmlspecialchars($user['email'] ?? '-') ?></td>
+                            <td class="px-4 py-3">
                                 <div class="flex items-center gap-2">
                                     <?php if ($user['id'] !== session()->get('user_id')): ?>
                                         <button onclick="openEditModal(<?= htmlspecialchars(json_encode($user)) ?>)"
@@ -89,9 +90,9 @@ $deptOptions = ['Human Resources', 'Produksi', 'Quality Control', 'Warehouse', '
                     <?php endforeach; ?>
                 <?php else: ?>
                     <tr>
-                        <td colspan="6" class="px-6 py-10 text-center text-gray-400">
-                            <i class="fas fa-users text-3xl mb-3 block text-gray-300"></i>
-                            Belum ada user
+                        <td colspan="8" class="px-6 py-10 text-center text-gray-400">
+                            <i class="fas fa-user-tie text-3xl mb-3 block text-gray-300"></i>
+                            Belum ada Team Leader
                         </td>
                     </tr>
                 <?php endif; ?>
@@ -102,9 +103,9 @@ $deptOptions = ['Human Resources', 'Produksi', 'Quality Control', 'Warehouse', '
 
 <!-- Modal Tambah -->
 <div id="addModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg">
-        <div class="px-6 py-4 border-b flex items-center justify-between">
-            <h3 class="text-lg font-bold text-gray-900">Tambah User</h3>
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div class="px-6 py-4 border-b flex items-center justify-between sticky top-0 bg-white rounded-t-2xl">
+            <h3 class="text-lg font-bold text-gray-900">Tambah Team Leader</h3>
             <button onclick="closeModal('addModal')" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
         </div>
         <form action="/users/store" method="POST" class="p-6 space-y-4">
@@ -117,9 +118,9 @@ $deptOptions = ['Human Resources', 'Produksi', 'Quality Control', 'Warehouse', '
                     <p class="text-xs text-gray-400 mt-1">Password default = NIK</p>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Role <span class="text-red-500">*</span></label>
-                    <select name="role" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
-                        <option value="team-leader">Team Leader</option>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                    <select name="role" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                        <option value="team-leader" selected>Team Leader</option>
                         <option value="hrd">HRD</option>
                     </select>
                 </div>
@@ -129,10 +130,17 @@ $deptOptions = ['Human Resources', 'Produksi', 'Quality Control', 'Warehouse', '
                 <input type="text" name="nama" required placeholder="Nama lengkap"
                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
             </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input type="email" name="email" placeholder="email@perusahaan.com"
-                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <input type="email" name="email" placeholder="email@perusahaan.com"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Posisi</label>
+                    <input type="text" name="posisi" placeholder="Contoh: Team Leader"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                </div>
             </div>
             <div class="grid grid-cols-2 gap-4">
                 <div>
@@ -145,10 +153,23 @@ $deptOptions = ['Human Resources', 'Produksi', 'Quality Control', 'Warehouse', '
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Posisi</label>
-                    <input type="text" name="posisi" placeholder="Contoh: Supervisor"
-                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Jenis Kelamin</label>
+                    <select name="jenis_kelamin" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                        <option value="">-- Pilih --</option>
+                        <option value="L">Laki-laki</option>
+                        <option value="P">Perempuan</option>
+                    </select>
                 </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Tanggal Lahir</label>
+                <input type="date" name="tanggal_lahir"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Alamat</label>
+                <textarea name="alamat" rows="2" placeholder="Alamat lengkap"
+                          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-none"></textarea>
             </div>
             <div class="flex justify-end gap-3 pt-2">
                 <button type="button" onclick="closeModal('addModal')"
@@ -162,9 +183,9 @@ $deptOptions = ['Human Resources', 'Produksi', 'Quality Control', 'Warehouse', '
 
 <!-- Modal Edit -->
 <div id="editModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg">
-        <div class="px-6 py-4 border-b flex items-center justify-between">
-            <h3 class="text-lg font-bold text-gray-900">Edit User</h3>
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div class="px-6 py-4 border-b flex items-center justify-between sticky top-0 bg-white rounded-t-2xl">
+            <h3 class="text-lg font-bold text-gray-900">Edit Team Leader</h3>
             <button onclick="closeModal('editModal')" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
         </div>
         <form id="editForm" method="POST" class="p-6 space-y-4">
@@ -176,8 +197,8 @@ $deptOptions = ['Human Resources', 'Produksi', 'Quality Control', 'Warehouse', '
                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Role <span class="text-red-500">*</span></label>
-                    <select name="role" id="e_role" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                    <select name="role" id="e_role" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
                         <option value="team-leader">Team Leader</option>
                         <option value="hrd">HRD</option>
                     </select>
@@ -188,10 +209,17 @@ $deptOptions = ['Human Resources', 'Produksi', 'Quality Control', 'Warehouse', '
                 <input type="text" name="nama" id="e_nama" required
                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
             </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input type="email" name="email" id="e_email"
-                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <input type="email" name="email" id="e_email"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Posisi</label>
+                    <input type="text" name="posisi" id="e_posisi"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                </div>
             </div>
             <div class="grid grid-cols-2 gap-4">
                 <div>
@@ -204,10 +232,23 @@ $deptOptions = ['Human Resources', 'Produksi', 'Quality Control', 'Warehouse', '
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Posisi</label>
-                    <input type="text" name="posisi" id="e_posisi"
-                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Jenis Kelamin</label>
+                    <select name="jenis_kelamin" id="e_jenis_kelamin" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                        <option value="">-- Pilih --</option>
+                        <option value="L">Laki-laki</option>
+                        <option value="P">Perempuan</option>
+                    </select>
                 </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Tanggal Lahir</label>
+                <input type="date" name="tanggal_lahir" id="e_tanggal_lahir"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Alamat</label>
+                <textarea name="alamat" id="e_alamat" rows="2"
+                          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-none"></textarea>
             </div>
             <div class="flex justify-end gap-3 pt-2">
                 <button type="button" onclick="closeModal('editModal')"
@@ -220,22 +261,20 @@ $deptOptions = ['Human Resources', 'Produksi', 'Quality Control', 'Warehouse', '
 </div>
 
 <script>
-// Search
 document.getElementById('searchInput').addEventListener('input', function () {
-    const q = this.value.toLowerCase();
-    let count = 0;
+    var q = this.value.toLowerCase();
+    var count = 0;
     document.querySelectorAll('#usersTable tbody tr[data-search]').forEach(function (row) {
-        const match = row.dataset.search.includes(q);
+        var match = row.dataset.search.includes(q);
         row.style.display = match ? '' : 'none';
         if (match) count++;
     });
-    document.getElementById('rowCount').textContent = count + ' user';
+    document.getElementById('rowCount').textContent = count + ' team leader';
 });
 
-// Init count
 document.addEventListener('DOMContentLoaded', function () {
-    const total = document.querySelectorAll('#usersTable tbody tr[data-search]').length;
-    document.getElementById('rowCount').textContent = total + ' user';
+    var total = document.querySelectorAll('#usersTable tbody tr[data-search]').length;
+    document.getElementById('rowCount').textContent = total + ' team leader';
 });
 
 function openAddModal() {
@@ -244,18 +283,24 @@ function openAddModal() {
 
 function openEditModal(user) {
     document.getElementById('editForm').action = '/users/' + user.id;
-    document.getElementById('e_nik').value        = user.nik;
-    document.getElementById('e_nama').value       = user.nama;
-    document.getElementById('e_email').value      = user.email || '';
-    document.getElementById('e_posisi').value     = user.posisi || '';
+    document.getElementById('e_nik').value            = user.nik;
+    document.getElementById('e_nama').value           = user.nama;
+    document.getElementById('e_email').value          = user.email || '';
+    document.getElementById('e_posisi').value         = user.posisi || '';
+    document.getElementById('e_tanggal_lahir').value  = user.tanggal_lahir || '';
+    document.getElementById('e_alamat').value         = user.alamat || '';
 
-    const roleSel = document.getElementById('e_role');
-    for (let i = 0; i < roleSel.options.length; i++)
+    var roleSel = document.getElementById('e_role');
+    for (var i = 0; i < roleSel.options.length; i++)
         roleSel.options[i].selected = roleSel.options[i].value === user.role;
 
-    const deptSel = document.getElementById('e_departemen');
-    for (let i = 0; i < deptSel.options.length; i++)
+    var deptSel = document.getElementById('e_departemen');
+    for (var i = 0; i < deptSel.options.length; i++)
         deptSel.options[i].selected = deptSel.options[i].value === (user.departemen || '');
+
+    var jkSel = document.getElementById('e_jenis_kelamin');
+    for (var i = 0; i < jkSel.options.length; i++)
+        jkSel.options[i].selected = jkSel.options[i].value === (user.jenis_kelamin || '');
 
     document.getElementById('editModal').classList.remove('hidden');
 }
@@ -280,7 +325,7 @@ function resetPassword(id, nik) {
 }
 
 function hapusUser(id, nama) {
-    showConfirm('Hapus user ' + nama + '?', function () {
+    showConfirm('Hapus Team Leader ' + nama + '?', function () {
         fetch('/users/' + id, {
             method: 'DELETE',
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -293,7 +338,6 @@ function hapusUser(id, nama) {
     });
 }
 
-// Tutup modal klik di luar
 ['addModal', 'editModal'].forEach(function (id) {
     document.getElementById(id).addEventListener('click', function (e) {
         if (e.target === this) closeModal(id);

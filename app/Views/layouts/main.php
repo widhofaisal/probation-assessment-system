@@ -4,9 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title><?= $title ?? 'Sistem Penilaian Probation' ?></title>
+    <title><?= $title ? htmlspecialchars($title) . ' | ' : '' ?>Sistem Penilaian Probation</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <link rel="shortcut icon" href="/favicon.ico">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -69,25 +68,21 @@
         <nav class="flex-1 overflow-y-auto p-4">
             <div class="space-y-2">
                 <?php if (session()->get('role') === 'hrd'): ?>
-                    <a href="/dashboard/hrd" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-100 transition">
+                    <a href="/dashboard/hrd" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-100 transition <?= (current_url(true)->getPath() === '/dashboard/hrd') ? 'sidebar-active' : '' ?>">
                         <i class="fas fa-chart-line text-blue-600"></i>
                         <span class="font-medium text-gray-700">Dashboard</span>
                     </a>
-                    <a href="/employees" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-100 transition">
+                    <a href="/employees" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-100 transition <?= str_starts_with(current_url(true)->getPath(), '/employees') ? 'sidebar-active' : '' ?>">
                         <i class="fas fa-users text-blue-600"></i>
-                        <span class="font-medium text-gray-700">Data Karyawan</span>
+                        <span class="font-medium text-gray-700">Data Team Member</span>
                     </a>
-                    <a href="/evaluations" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-100 transition">
+                    <a href="/evaluations" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-100 transition <?= str_starts_with(current_url(true)->getPath(), '/evaluations') ? 'sidebar-active' : '' ?>">
                         <i class="fas fa-file-alt text-blue-600"></i>
                         <span class="font-medium text-gray-700">Daftar Penilaian</span>
                     </a>
-                    <a href="/reports/audit-trail" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-100 transition">
-                        <i class="fas fa-history text-blue-600"></i>
-                        <span class="font-medium text-gray-700">Audit Trail</span>
-                    </a>
-                    <a href="/users" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-100 transition">
-                        <i class="fas fa-user-cog text-blue-600"></i>
-                        <span class="font-medium text-gray-700">Manajemen User</span>
+                    <a href="/users" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-100 transition <?= str_starts_with(current_url(true)->getPath(), '/users') ? 'sidebar-active' : '' ?>">
+                        <i class="fas fa-user-tie text-blue-600"></i>
+                        <span class="font-medium text-gray-700">Data Team Leader</span>
                     </a>
                 <?php elseif (session()->get('role') === 'team-leader'): ?>
                     <a href="/dashboard/team-leader" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-100 transition">
@@ -103,7 +98,7 @@
                         <i class="fas fa-chart-line text-blue-600"></i>
                         <span class="font-medium text-gray-700">Dashboard</span>
                     </a>
-                    <a href="/dashboard/probationary" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-100 transition">
+                    <a href="/evaluations/my" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-100 transition">
                         <i class="fas fa-file-alt text-blue-600"></i>
                         <span class="font-medium text-gray-700">Hasil Evaluasi</span>
                     </a>
@@ -210,7 +205,7 @@ document.addEventListener('click', function(e) {
 // ===== TOAST SYSTEM =====
 function showToast(message, type, duration) {
     type = type || 'success';
-    duration = duration || 4000;
+    duration = (duration === undefined) ? 4000 : duration;
     const cfg = {
         success: { border: 'border-green-500', bar: 'bg-green-500', icon: 'fa-check-circle', ic: 'text-green-500' },
         error:   { border: 'border-red-500',   bar: 'bg-red-500',   icon: 'fa-times-circle', ic: 'text-red-500'   },
@@ -221,6 +216,9 @@ function showToast(message, type, duration) {
     const t = document.createElement('div');
     t.className = 'toast-enter pointer-events-auto bg-white rounded-xl shadow-xl border-l-4 ' + c.border + ' overflow-hidden';
     t.setAttribute('data-toast', '');
+    const barHtml = duration > 0
+        ? '<div class="h-1 ' + c.bar + ' opacity-50 toast-bar" style="--dur:' + (duration / 1000) + 's"></div>'
+        : '<div class="h-1 ' + c.bar + ' opacity-30"></div>';
     t.innerHTML =
         '<div class="flex items-start gap-3 p-4">' +
             '<i class="fas ' + c.icon + ' ' + c.ic + ' text-lg mt-0.5 flex-shrink-0"></i>' +
@@ -228,10 +226,10 @@ function showToast(message, type, duration) {
             '<button onclick="dismissToast(this.closest(\'[data-toast]\'))" class="text-gray-400 hover:text-gray-600 ml-1 flex-shrink-0">' +
                 '<i class="fas fa-times text-xs"></i>' +
             '</button>' +
-        '</div>' +
-        '<div class="h-1 ' + c.bar + ' opacity-50 toast-bar" style="--dur:' + (duration / 1000) + 's"></div>';
+        '</div>' + barHtml;
     document.getElementById('toastContainer').appendChild(t);
-    t._timer = setTimeout(function() { dismissToast(t); }, duration);
+    if (duration > 0) t._timer = setTimeout(function() { dismissToast(t); }, duration);
+    return t;
 }
 
 function dismissToast(t) {
@@ -273,6 +271,37 @@ document.addEventListener('keydown', function(e) {
         _confirmCb = null;
     }
 });
+
+// ===== PDF DOWNLOAD WITH TOAST =====
+// Stays on current page; fetches PDF in background; opens new tab only when ready.
+function pdfDownload(url) {
+    var loadingToast = showToast('Sedang memproses PDF, mohon tunggu...', 'info', 0);
+
+    fetch(url, { credentials: 'same-origin' })
+        .then(function(response) {
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            return response.blob();
+        })
+        .then(function(blob) {
+            dismissToast(loadingToast);
+            var blobUrl = URL.createObjectURL(blob);
+            var newWin = window.open(blobUrl, '_blank');
+            if (!newWin) {
+                // Popup blocked — fallback to programmatic link click
+                var a = document.createElement('a');
+                a.href = blobUrl;
+                a.target = '_blank';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            }
+            showToast('PDF berhasil dibuka di tab baru!', 'success', 4000);
+        })
+        .catch(function() {
+            dismissToast(loadingToast);
+            showToast('Gagal menghasilkan PDF. Silakan coba lagi.', 'error', 6000);
+        });
+}
 
 // ===== FLASH MESSAGES =====
 <?php if (session()->has('success')): ?>

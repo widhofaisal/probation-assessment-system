@@ -1,10 +1,46 @@
 <?php $this->extend('layouts/main'); $this->section('content'); ?>
 
 <!-- Welcome Banner -->
-<div class="mb-8 bg-gradient-to-br from-green-600 via-blue-600 to-blue-700 text-white rounded-2xl p-8 shadow-xl">
-    <h1 class="text-4xl font-bold mb-2"><?= htmlspecialchars($user['nama']) ?></h1>
-    <p class="text-white/80">Probationary Employee Dashboard</p>
+<div class="mb-8 relative overflow-hidden rounded-2xl">
+    <div class="p-8 bg-gradient-to-br from-green-600 via-blue-600 to-blue-700 text-white shadow-xl rounded-2xl">
+        <div class="relative z-10 flex items-start justify-between flex-wrap gap-6">
+            <div class="flex-1">
+                <div class="inline-block px-4 py-1.5 bg-white/20 backdrop-blur-sm rounded-full mb-4">
+                    <p class="text-sm font-medium text-white/90"><?= htmlspecialchars($greeting) ?></p>
+                </div>
+                <h1 class="text-4xl lg:text-5xl font-bold mb-3 text-white"><?= htmlspecialchars($user['nama']) ?></h1>
+                <div class="flex flex-wrap items-center gap-3 text-white/90 mb-4">
+                    <div class="flex items-center gap-2 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-lg">
+                        <i class="fas fa-id-card"></i>
+                        <span class="text-sm font-medium">NIK: <?= htmlspecialchars($user['nik']) ?></span>
+                    </div>
+                    <div class="flex items-center gap-2 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-lg">
+                        <i class="fas fa-briefcase"></i>
+                        <span class="text-sm font-medium"><?= htmlspecialchars($user['posisi'] ?? '') ?></span>
+                    </div>
+                    <div class="flex items-center gap-2 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-lg">
+                        <i class="fas fa-calendar"></i>
+                        <span class="text-sm font-medium"><?= (new \DateTime('now', new \DateTimeZone('Asia/Jakarta')))->format('d/m/Y') ?></span>
+                    </div>
+                </div>
+                <p class="text-white/80 text-base max-w-2xl leading-relaxed">
+                    Pantau perkembangan masa probasi Anda di sini.
+                </p>
+            </div>
+            <div class="hidden lg:block">
+                <div class="w-32 h-32 rounded-2xl bg-white/10 backdrop-blur-md border-4 border-white/20 flex items-center justify-center shadow-2xl">
+                    <i class="fas fa-user text-white text-5xl"></i>
+                </div>
+            </div>
+        </div>
+        <div class="absolute top-0 right-0 w-80 h-80 bg-white/5 rounded-full blur-3xl -mr-40 -mt-40"></div>
+        <div class="absolute bottom-0 left-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -ml-32 -mb-32"></div>
+    </div>
 </div>
+
+<!-- Dashboard heading -->
+<h2 class="text-2xl font-bold text-gray-900 mb-2">Dashboard Overview</h2>
+<p class="text-gray-600 mb-8">Informasi masa probasi Anda</p>
 
 <!-- Employee Status Card -->
 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">

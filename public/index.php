@@ -39,19 +39,56 @@ if (getcwd() . DIRECTORY_SEPARATOR !== FCPATH) {
 
 /*
  *---------------------------------------------------------------
- * BOOTSTRAP THE APPLICATION
+ * AUTO-DETECT APPLICATION LAYOUT  (plug-n-play: local & InfinityFree)
  *---------------------------------------------------------------
- * This process sets up the path constants, loads and registers
- * our autoloader, along with Composer's, loads our constants
- * and fires up an environment-specific bootstrapping.
+ * Local (php spark serve / XAMPP):  app/ vendor/ writable/  sejajar dengan public/
+ * InfinityFree (open_basedir=htdocs/):  app/ vendor/ writable/  di DALAM public/ (= htdocs/)
  */
+$pathsCandidates = [
+    FCPATH . '..' . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Config' . DIRECTORY_SEPARATOR . 'Paths.php', // local layout
+    FCPATH . 'app' . DIRECTORY_SEPARATOR . 'Config' . DIRECTORY_SEPARATOR . 'Paths.php',                              // server layout
+];
 
-// LOAD OUR PATHS CONFIG FILE
-// This is the line that might need to be changed, depending on your folder structure.
-require FCPATH . '../app/Config/Paths.php';
-// ^^^ Change this line if you move your application folder
+$pathsFile = null;
+foreach ($pathsCandidates as $candidate) {
+    if (is_file($candidate)) {
+        $pathsFile = $candidate;
+        break;
+    }
+}
+
+if ($pathsFile === null) {
+    header('HTTP/1.1 503 Service Unavailable.', true, 503);
+    echo 'Bootstrap error: Config/Paths.php tidak ditemukan. Pastikan folder app/ ada di sebelah public/ (lokal) atau di dalam public/ (InfinityFree).';
+    exit(1);
+}
+
+require $pathsFile;
 
 $paths = new Paths();
+
+/*
+ *---------------------------------------------------------------
+ * ENVIRONMENT CONFIG (hybrid loader)
+ *---------------------------------------------------------------
+ * Prioritas:
+ *   1. env.local.php  (di FCPATH atau parent FCPATH)
+ *      -> dipakai di InfinityFree karena putenv() disabled & open_basedir.
+ *      -> file ini meng-set $_ENV[...] langsung; CI4 env() membaca $_ENV sebagai fallback.
+ *   2. .env standar    -> dibaca CI4 DotEnv otomatis (lokal).
+ *
+ * env.local.php WAJIB di-gitignore (berisi kredensial).
+ */
+$envLocalCandidates = [
+    FCPATH . 'env.local.php',                       // server: di htdocs/
+    dirname(FCPATH) . DIRECTORY_SEPARATOR . 'env.local.php', // lokal: di project root
+];
+foreach ($envLocalCandidates as $envLocal) {
+    if (is_file($envLocal)) {
+        require $envLocal;
+        break;
+    }
+}
 
 // LOAD THE FRAMEWORK BOOTSTRAP FILE
 require $paths->systemDirectory . '/Boot.php';

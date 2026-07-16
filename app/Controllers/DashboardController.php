@@ -37,19 +37,39 @@ class DashboardController extends BaseController
             'total_evaluations' => $this->evaluationModel->countAllResults(),
         ];
 
-        $recentEvaluations = $this->evaluationModel->select('penilaian.*, employees.nama, employees.nik, users.nama as team_leader_nama')
+        $recentEvalsRaw = $this->evaluationModel
+            ->select('penilaian.*, employees.nama, employees.nik, users.nama as team_leader_nama')
             ->join('employees', 'penilaian.employee_id = employees.id')
             ->join('users', 'penilaian.team_leader_id = users.id')
             ->orderBy('penilaian.tanggal_penilaian', 'DESC')
-            ->limit(10)
+            ->limit(20)
             ->findAll();
 
+        $evalByEmployee = [];
+        foreach ($recentEvalsRaw as $eval) {
+            $eid   = $eval['employee_id'];
+            $nomor = (int)($eval['nomor_penilaian'] ?? 1);
+            if (!isset($evalByEmployee[$eid])) {
+                $evalByEmployee[$eid] = [
+                    'employee_id'      => $eid,
+                    'nik'              => $eval['nik'],
+                    'nama'             => $eval['nama'],
+                    'team_leader_nama' => $eval['team_leader_nama'],
+                    'eval1'            => null,
+                    'eval2'            => null,
+                ];
+            }
+            if ($nomor === 1 && !$evalByEmployee[$eid]['eval1']) $evalByEmployee[$eid]['eval1'] = $eval;
+            if ($nomor === 2 && !$evalByEmployee[$eid]['eval2']) $evalByEmployee[$eid]['eval2'] = $eval;
+        }
+
         $data = [
-            'title' => 'HRD Dashboard',
-            'greeting' => $this->getGreeting(),
-            'user' => session()->get(),
-            'stats' => $stats,
-            'recentEvaluations' => $recentEvaluations,
+            'title'             => 'Dashboard HRD',
+            'greeting'          => $this->getGreeting(),
+            'user'              => session()->get(),
+            'stats'             => $stats,
+            'recentEvaluations' => array_slice($recentEvalsRaw, 0, 10),
+            'evalByEmployee'    => array_slice(array_values($evalByEmployee), 0, 10),
         ];
 
         return view('Dashboard/hrd', $data);
@@ -65,23 +85,42 @@ class DashboardController extends BaseController
         }
 
         $teamLeaderId = session()->get('user_id');
-        $employees = $this->employeeModel->getByTeamLeader($teamLeaderId);
-        $evaluations = $this->evaluationModel->getByTeamLeader($teamLeaderId);
+        $employees    = $this->employeeModel->getByTeamLeader($teamLeaderId);
+        $evaluations  = $this->evaluationModel->getByTeamLeader($teamLeaderId);
 
         $stats = [
             'total_team_members' => count($employees),
             'pending_evaluation' => count(array_filter($employees, fn($e) => $e['status'] === 'pending')),
-            'total_evaluations' => count($evaluations),
-            'submitted' => count(array_filter($evaluations, fn($e) => $e['status'] === 'submitted')),
+            'total_evaluations'  => count($evaluations),
+            'submitted'          => count(array_filter($evaluations, fn($e) => $e['status'] === 'submitted')),
         ];
 
+        // Group evaluations by employee for the "Penilaian Terbaru" section
+        $evalByEmployee = [];
+        foreach ($evaluations as $eval) {
+            $eid   = $eval['employee_id'];
+            $nomor = (int)($eval['nomor_penilaian'] ?? 1);
+            if (!isset($evalByEmployee[$eid])) {
+                $evalByEmployee[$eid] = [
+                    'employee_id'   => $eid,
+                    'employee_nama' => $eval['employee_nama'],
+                    'nik'           => $eval['nik'],
+                    'eval1'         => null,
+                    'eval2'         => null,
+                ];
+            }
+            if ($nomor === 1 && !$evalByEmployee[$eid]['eval1']) $evalByEmployee[$eid]['eval1'] = $eval;
+            if ($nomor === 2 && !$evalByEmployee[$eid]['eval2']) $evalByEmployee[$eid]['eval2'] = $eval;
+        }
+
         $data = [
-            'title' => 'Team Leader Dashboard',
-            'greeting' => $this->getGreeting(),
-            'user' => session()->get(),
-            'stats' => $stats,
-            'employees' => $employees,
+            'title'             => 'Dashboard Team Leader',
+            'greeting'          => $this->getGreeting(),
+            'user'              => session()->get(),
+            'stats'             => $stats,
+            'employees'         => $employees,
             'recentEvaluations' => array_slice($evaluations, 0, 5),
+            'evalByEmployee'    => array_slice(array_values($evalByEmployee), 0, 5),
         ];
 
         return view('Dashboard/teamleader', $data);
@@ -100,22 +139,43 @@ class DashboardController extends BaseController
         $employees    = $this->employeeModel->getByTeamLeader($teamLeaderId);
         $db           = \Config\Database::connect();
 
-        // Ambil tanggal penilaian terakhir + total per employee dari TL ini
-        $lastEvals = $db->table('penilaian')
-            ->select('employee_id, MAX(tanggal_penilaian) AS last_eval_date, COUNT(*) AS total_penilaian')
+        // Ambil semua evaluasi TL ini, diurutkan terbaru dulu
+        $allEvals = $db->table('penilaian')
+            ->select('employee_id, id, tanggal_penilaian, nomor_penilaian')
             ->where('team_leader_id', $teamLeaderId)
-            ->groupBy('employee_id')
+            ->orderBy('tanggal_penilaian', 'DESC')
             ->get()->getResultArray();
-        $lastEvalMap = array_column($lastEvals, null, 'employee_id');
+
+        // Bangun map: employee_id → {last_eval_date, last_eval_id, total_penilaian, eval1_id, eval2_id}
+        $lastEvalMap = [];
+        foreach ($allEvals as $ev) {
+            $eid   = $ev['employee_id'];
+            $nomor = (int)($ev['nomor_penilaian'] ?? 1);
+            if (!isset($lastEvalMap[$eid])) {
+                $lastEvalMap[$eid] = [
+                    'last_eval_date'  => $ev['tanggal_penilaian'],
+                    'last_eval_id'    => $ev['id'],
+                    'total_penilaian' => 0,
+                    'eval1_id'        => null,
+                    'eval2_id'        => null,
+                ];
+            }
+            $lastEvalMap[$eid]['total_penilaian']++;
+            if ($nomor === 1 && !$lastEvalMap[$eid]['eval1_id']) $lastEvalMap[$eid]['eval1_id'] = $ev['id'];
+            if ($nomor === 2 && !$lastEvalMap[$eid]['eval2_id']) $lastEvalMap[$eid]['eval2_id'] = $ev['id'];
+        }
 
         $today          = new \DateTime('today');
         $intervalHarian = 45; // Siklus penilaian: ~1,5 bulan
         $maxPenilaian   = 2;  // Maks 2x penilaian selama probation 3 bulan
 
         foreach ($employees as &$emp) {
-            $lastEval      = $lastEvalMap[$emp['id']] ?? null;
+            $lastEval       = $lastEvalMap[$emp['id']] ?? null;
             $totalPenilaian = (int)($lastEval['total_penilaian'] ?? 0);
-            $mulai         = $emp['mulai_probation'] ? new \DateTime($emp['mulai_probation']) : null;
+            $emp['last_eval_id'] = $lastEval['last_eval_id'] ?? null;
+            $emp['eval1_id']     = $lastEval['eval1_id'] ?? null;
+            $emp['eval2_id']     = $lastEval['eval2_id'] ?? null;
+            $mulai          = $emp['mulai_probation'] ? new \DateTime($emp['mulai_probation']) : null;
 
             // Status final dari HRD → tidak perlu logika siklus
             if ($emp['status'] !== 'pending') {
@@ -190,13 +250,13 @@ class DashboardController extends BaseController
         $employee = $this->employeeModel->findByNik(session()->get('nik'));
 
         if (!$employee) {
-            return view('Dashboard/member_no_data', ['title' => 'Probationary Employee Dashboard', 'user' => session()->get()]);
+            return view('Dashboard/member_no_data', ['title' => 'Dashboard', 'user' => session()->get()]);
         }
 
         $evaluations = $this->evaluationModel->getByEmployee($employee['id']);
 
         $data = [
-            'title' => 'Probationary Employee Dashboard',
+            'title' => 'Dashboard',
             'greeting' => $this->getGreeting(),
             'user' => session()->get(),
             'employee' => $employee,
@@ -300,7 +360,8 @@ class DashboardController extends BaseController
      */
     protected function getGreeting(): string
     {
-        $hour = (int) date('H');
+        $dt   = new \DateTime('now', new \DateTimeZone('Asia/Jakarta'));
+        $hour = (int) $dt->format('H');
 
         if ($hour < 12) {
             return 'Selamat Pagi';

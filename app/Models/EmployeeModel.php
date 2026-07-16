@@ -13,6 +13,7 @@ class EmployeeModel extends Model
     protected $useSoftDeletes = true;
     protected $allowedFields = ['nik', 'nama', 'departemen', 'posisi', 'email', 'tanggal_masuk',
                                 'mulai_probation', 'akhir_probation', 'status', 'team_leader_id',
+                                'jenis_kelamin', 'tanggal_lahir', 'alamat',
                                 'created_by', 'created_at', 'updated_at', 'deleted_at'];
     protected $useTimestamps = true;
     protected $createdField  = 'created_at';

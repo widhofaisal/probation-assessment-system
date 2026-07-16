@@ -20,11 +20,11 @@
                     </div>
                     <div class="flex items-center gap-2 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-lg">
                         <i class="fas fa-calendar"></i>
-                        <span class="text-sm font-medium"><?= date('d/m/Y') ?></span>
+                        <span class="text-sm font-medium"><?= (new \DateTime('now', new \DateTimeZone('Asia/Jakarta')))->format('d/m/Y') ?></span>
                     </div>
                 </div>
                 <p class="text-white/80 text-base max-w-2xl leading-relaxed">
-                    Selamat datang di Sistem Penilaian Probation PT Sumber Masanda Jaya. Kelola seluruh data karyawan probation dengan mudah dan efisien.
+                    Kelola seluruh data Team Member probation dengan mudah dan efisien.
                 </p>
             </div>
             <div class="hidden lg:block">
@@ -42,14 +42,14 @@
 
 <!-- Statistics Cards -->
 <h2 class="text-2xl font-bold text-gray-900 mb-2">Dashboard Overview</h2>
-<p class="text-gray-600 mb-8">Ringkasan data karyawan probation</p>
+<p class="text-gray-600 mb-8">Ringkasan data Team Member probation</p>
 
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
     <!-- Total Employees -->
     <div class="bg-white rounded-xl shadow p-6 border-t-4 border-blue-500">
         <div class="flex justify-between items-start">
             <div>
-                <p class="text-gray-600 text-sm font-medium">Total Karyawan</p>
+                <p class="text-gray-600 text-sm font-medium">Total Team Member</p>
                 <p class="text-3xl font-bold text-gray-900 mt-2"><?= $stats['total_employees'] ?></p>
             </div>
             <div class="p-3 bg-blue-100 rounded-lg">
@@ -107,8 +107,8 @@
                 <i class="fas fa-plus text-blue-600 text-2xl"></i>
             </div>
             <div>
-                <h4 class="font-semibold text-gray-900">Tambah Karyawan</h4>
-                <p class="text-sm text-gray-600">Tambahkan karyawan baru ke sistem</p>
+                <h4 class="font-semibold text-gray-900">Tambah Team Member</h4>
+                <p class="text-sm text-gray-600">Tambahkan Team Member baru ke sistem</p>
             </div>
         </a>
 
@@ -117,8 +117,8 @@
                 <i class="fas fa-list text-green-600 text-2xl"></i>
             </div>
             <div>
-                <h4 class="font-semibold text-gray-900">Kelola Data</h4>
-                <p class="text-sm text-gray-600">Lihat dan edit data karyawan</p>
+                <h4 class="font-semibold text-gray-900">Kelola Data Team Member</h4>
+                <p class="text-sm text-gray-600">Lihat dan edit data Team Member</p>
             </div>
         </a>
 
@@ -134,7 +134,7 @@
     </div>
 </div>
 
-<!-- Recent Evaluations -->
+<!-- Recent Evaluations grouped by employee -->
 <div class="bg-white rounded-xl shadow">
     <div class="px-6 py-4 border-b flex justify-between items-center">
         <h3 class="text-lg font-bold text-gray-900">Penilaian Terbaru</h3>
@@ -143,32 +143,72 @@
     <div class="overflow-x-auto">
         <table class="w-full">
             <thead>
-                <tr class="border-b">
-                    <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">NIK</th>
-                    <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Nama Karyawan</th>
-                    <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Team Leader</th>
-                    <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Nilai</th>
-                    <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Status</th>
-                    <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Aksi</th>
+                <tr class="border-b bg-gray-50">
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">NIK</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Nama Team Member</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Team Leader</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Penilaian 1</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Penilaian 2</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Aksi</th>
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($recentEvaluations as $eval): ?>
-                    <tr class="border-b hover:bg-gray-50">
-                        <td class="px-6 py-4 text-sm font-medium text-gray-900"><?= htmlspecialchars($eval['nik']) ?></td>
-                        <td class="px-6 py-4 text-sm text-gray-700"><?= htmlspecialchars($eval['nama']) ?></td>
-                        <td class="px-6 py-4 text-sm text-gray-700"><?= htmlspecialchars($eval['team_leader_nama']) ?></td>
-                        <td class="px-6 py-4 text-sm font-semibold text-gray-900"><?= htmlspecialchars($eval['nilai_total']) ?></td>
-                        <td class="px-6 py-4">
-                            <span class="px-3 py-1 rounded-full text-xs font-medium <?= $eval['status'] === 'submitted' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700' ?>">
-                                <?= htmlspecialchars(ucfirst(str_replace('-', ' ', $eval['status']))) ?>
-                            </span>
-                        </td>
-                        <td class="px-6 py-4 text-sm">
-                            <a href="/evaluations/<?= $eval['id'] ?>" class="text-blue-600 hover:text-blue-700 font-medium">Lihat</a>
+                <?php if (!empty($evalByEmployee)): ?>
+                    <?php foreach ($evalByEmployee as $grp): ?>
+                        <?php $e1 = $grp['eval1']; $e2 = $grp['eval2']; ?>
+                        <tr class="border-b hover:bg-gray-50">
+                            <td class="px-6 py-4 text-sm font-medium text-gray-900"><?= htmlspecialchars($grp['nik']) ?></td>
+                            <td class="px-6 py-4 text-sm text-gray-700"><?= htmlspecialchars($grp['nama']) ?></td>
+                            <td class="px-6 py-4 text-sm text-gray-500"><?= htmlspecialchars($grp['team_leader_nama']) ?></td>
+                            <!-- Penilaian 1 -->
+                            <td class="px-6 py-4">
+                                <?php if ($e1): ?>
+                                    <div class="flex flex-col gap-1">
+                                        <span class="font-bold <?= $e1['nilai_total'] >= 8 ? 'text-green-600' : ($e1['nilai_total'] >= 6 ? 'text-blue-600' : 'text-red-600') ?>"><?= $e1['nilai_total'] ?></span>
+                                        <div class="flex gap-1">
+                                            <a href="/evaluations/<?= $e1['id'] ?>" class="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs rounded-lg">Detail</a>
+                                            <button onclick="pdfDownload('/reports/pdf/<?= $e1['id'] ?>')" class="px-2 py-0.5 bg-red-50 hover:bg-red-100 text-red-700 text-xs rounded-lg cursor-pointer">PDF</button>
+                                        </div>
+                                    </div>
+                                <?php else: ?>
+                                    <span class="text-gray-300 text-xs">-</span>
+                                <?php endif; ?>
+                            </td>
+                            <!-- Penilaian 2 -->
+                            <td class="px-6 py-4">
+                                <?php if ($e2): ?>
+                                    <div class="flex flex-col gap-1">
+                                        <span class="font-bold <?= $e2['nilai_total'] >= 8 ? 'text-green-600' : ($e2['nilai_total'] >= 6 ? 'text-blue-600' : 'text-red-600') ?>"><?= $e2['nilai_total'] ?></span>
+                                        <div class="flex gap-1">
+                                            <a href="/evaluations/<?= $e2['id'] ?>" class="px-2 py-0.5 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs rounded-lg">Detail</a>
+                                            <button onclick="pdfDownload('/reports/pdf/<?= $e2['id'] ?>')" class="px-2 py-0.5 bg-red-50 hover:bg-red-100 text-red-700 text-xs rounded-lg cursor-pointer">PDF</button>
+                                        </div>
+                                    </div>
+                                <?php else: ?>
+                                    <span class="text-gray-300 text-xs">Belum ada</span>
+                                <?php endif; ?>
+                            </td>
+                            <!-- Aksi -->
+                            <td class="px-6 py-4">
+                                <?php if ($e1 && $e2): ?>
+                                    <button onclick="pdfDownload('/reports/pdf-all/<?= $grp['employee_id'] ?>')"
+                                       class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+                                        <i class="fas fa-file-pdf text-xs"></i> PDF Semua
+                                    </button>
+                                <?php elseif ($e1): ?>
+                                    <span class="text-gray-400 text-xs">Penilaian 2 belum ada</span>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <tr>
+                        <td colspan="6" class="px-6 py-10 text-center text-gray-400">
+                            <i class="fas fa-inbox text-3xl mb-2 block text-gray-300"></i>
+                            Belum ada penilaian
                         </td>
                     </tr>
-                <?php endforeach; ?>
+                <?php endif; ?>
             </tbody>
         </table>
     </div>

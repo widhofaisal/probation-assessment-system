@@ -38,7 +38,7 @@ foreach ($details as $d) {
         <div>
             <h2 class="text-2xl font-bold text-gray-900">Edit Penilaian</h2>
             <p class="text-gray-500 mt-1 text-sm">
-                Karyawan: <span class="font-semibold text-blue-600"><?= htmlspecialchars($evaluation['nama']) ?></span>
+                Team Member: <span class="font-semibold text-blue-600"><?= htmlspecialchars($evaluation['nama']) ?></span>
                 · Dinilai <?= date('d/m/Y', strtotime($evaluation['tanggal_penilaian'])) ?>
             </p>
         </div>

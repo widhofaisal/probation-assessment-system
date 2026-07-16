@@ -18,7 +18,7 @@
     <!-- Employee & Evaluation Info -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <div class="bg-white rounded-xl shadow p-6">
-            <h3 class="font-bold text-gray-900 mb-4">Informasi Karyawan</h3>
+            <h3 class="font-bold text-gray-900 mb-4">Informasi Team Member</h3>
             <div class="space-y-3">
                 <div>
                     <p class="text-xs text-gray-600">NIK</p>
@@ -141,10 +141,10 @@
 
     <!-- Actions -->
     <div class="flex gap-3 mb-6">
-        <a href="/reports/pdf/<?= $evaluation['id'] ?>" target="_blank"
-           class="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium">
+        <button onclick="pdfDownload('/reports/pdf/<?= $evaluation['id'] ?>')"
+           class="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium cursor-pointer">
             <i class="fas fa-file-pdf mr-2"></i> Download PDF
-        </a>
+        </button>
         <a href="/evaluations" class="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-medium">
             <i class="fas fa-arrow-left mr-2"></i> Kembali
         </a>

@@ -38,12 +38,25 @@ class EmployeesController extends BaseController
             $query = $query->where('status', $status);
         }
 
-        $employees = $query->findAll();
+        $employees   = $query->findAll();
         $departments = $this->employeeModel->distinct()->select('departemen')->findAll();
         $teamLeaders = $this->userModel->getTeamLeaders();
 
+        // Ambil jumlah penilaian per karyawan
+        $db = \Config\Database::connect();
+        $evalCounts = $db->table('penilaian')
+            ->select('employee_id, COUNT(*) AS total_penilaian')
+            ->groupBy('employee_id')
+            ->get()->getResultArray();
+        $evalCountMap = array_column($evalCounts, 'total_penilaian', 'employee_id');
+
+        foreach ($employees as &$emp) {
+            $emp['total_penilaian'] = (int)($evalCountMap[$emp['id']] ?? 0);
+        }
+        unset($emp);
+
         $data = [
-            'title' => 'Data Karyawan',
+            'title' => 'Data Team Member',
             'employees' => $employees,
             'departments' => $departments,
             'teamLeaders' => $teamLeaders,
@@ -66,11 +79,11 @@ class EmployeesController extends BaseController
         $employee = $this->employeeModel->find($id);
 
         if (!$employee) {
-            return redirect()->back()->with('error', 'Karyawan tidak ditemukan');
+            return redirect()->back()->with('error', 'Team Member tidak ditemukan');
         }
 
         $data = [
-            'title' => 'Detail Karyawan',
+            'title' => 'Detail Team Member',
             'employee' => $employee,
         ];
 
@@ -103,17 +116,20 @@ class EmployeesController extends BaseController
         }
 
         $data = [
-            'nik' => $this->request->getPost('nik'),
-            'nama' => $this->request->getPost('nama'),
-            'departemen' => $this->request->getPost('departemen'),
-            'posisi' => $this->request->getPost('posisi'),
-            'email' => $this->request->getPost('email'),
-            'tanggal_masuk' => $this->request->getPost('tanggal_masuk'),
+            'nik'             => $this->request->getPost('nik'),
+            'nama'            => $this->request->getPost('nama'),
+            'departemen'      => $this->request->getPost('departemen'),
+            'posisi'          => $this->request->getPost('posisi'),
+            'email'           => $this->request->getPost('email'),
+            'tanggal_masuk'   => $this->request->getPost('tanggal_masuk'),
             'mulai_probation' => $this->request->getPost('mulai_probation'),
             'akhir_probation' => EmployeeModel::calculateProbationEnd($this->request->getPost('mulai_probation')),
-            'status' => 'pending',
-            'team_leader_id' => $this->request->getPost('team_leader_id') ?: null,
-            'created_by' => session()->get('user_id'),
+            'status'          => 'pending',
+            'team_leader_id'  => $this->request->getPost('team_leader_id') ?: null,
+            'jenis_kelamin'   => $this->request->getPost('jenis_kelamin') ?: null,
+            'tanggal_lahir'   => $this->request->getPost('tanggal_lahir') ?: null,
+            'alamat'          => $this->request->getPost('alamat') ?: null,
+            'created_by'      => session()->get('user_id'),
         ];
 
         $db = \Config\Database::connect();
@@ -133,6 +149,9 @@ class EmployeesController extends BaseController
                 'role'          => 'probationary-employee',
                 'departemen'    => $this->request->getPost('departemen'),
                 'posisi'        => $this->request->getPost('posisi'),
+                'jenis_kelamin' => $this->request->getPost('jenis_kelamin') ?: null,
+                'tanggal_lahir' => $this->request->getPost('tanggal_lahir') ?: null,
+                'alamat'        => $this->request->getPost('alamat') ?: null,
             ]);
         }
 
@@ -140,7 +159,7 @@ class EmployeesController extends BaseController
 
         if ($db->transStatus()) {
             $this->logAudit('CREATE', 'employees', $this->employeeModel->getInsertID(), null, $data);
-            return redirect()->to('/employees')->with('success', 'Karyawan berhasil ditambahkan. Password login: ' . $nikValue);
+            return redirect()->to('/employees')->with('success', 'Team Member berhasil ditambahkan. Password login: ' . $nikValue);
         }
 
         return redirect()->back()->withInput()->with('error', 'Gagal menambahkan karyawan');
@@ -158,7 +177,7 @@ class EmployeesController extends BaseController
         $employee = $this->employeeModel->find($id);
 
         if (!$employee) {
-            return redirect()->back()->with('error', 'Karyawan tidak ditemukan');
+            return redirect()->back()->with('error', 'Team Member tidak ditemukan');
         }
 
         $validation = \Config\Services::validation();
@@ -179,18 +198,21 @@ class EmployeesController extends BaseController
         }
 
         $newData = [
-            'nik' => $this->request->getPost('nik'),
-            'nama' => $this->request->getPost('nama'),
-            'departemen' => $this->request->getPost('departemen'),
-            'posisi' => $this->request->getPost('posisi'),
-            'email' => $this->request->getPost('email'),
+            'nik'           => $this->request->getPost('nik'),
+            'nama'          => $this->request->getPost('nama'),
+            'departemen'    => $this->request->getPost('departemen'),
+            'posisi'        => $this->request->getPost('posisi'),
+            'email'         => $this->request->getPost('email'),
             'tanggal_masuk' => $this->request->getPost('tanggal_masuk'),
             'mulai_probation' => $this->request->getPost('mulai_probation'),
-            'status' => $this->request->getPost('status'),
+            'status'        => $this->request->getPost('status'),
             'team_leader_id' => $this->request->getPost('team_leader_id') ?: null,
+            'jenis_kelamin'  => $this->request->getPost('jenis_kelamin') ?: null,
+            'tanggal_lahir'  => $this->request->getPost('tanggal_lahir') ?: null,
+            'alamat'         => $this->request->getPost('alamat') ?: null,
         ];
 
-        if ($this->employeeModel->update($id, $newData)) {
+        if ($this->employeeModel->skipValidation(true)->update($id, $newData)) {
             // Sinkron data akun login
             $this->userModel->where('nik', $employee['nik'])->where('role', 'probationary-employee')->set([
                 'nik'        => $newData['nik'],
@@ -203,7 +225,7 @@ class EmployeesController extends BaseController
             // Log audit
             $this->logAudit('UPDATE', 'employees', $id, $employee, $newData);
 
-            return redirect()->to('/employees')->with('success', 'Karyawan berhasil diperbarui');
+            return redirect()->to('/employees')->with('success', 'Team Member berhasil diperbarui');
         }
 
         return redirect()->back()->withInput()->with('error', 'Gagal memperbarui karyawan');
@@ -221,7 +243,7 @@ class EmployeesController extends BaseController
         $employee = $this->employeeModel->find($id);
 
         if (!$employee) {
-            return redirect()->back()->with('error', 'Karyawan tidak ditemukan');
+            return redirect()->back()->with('error', 'Team Member tidak ditemukan');
         }
 
         if ($this->employeeModel->delete($id)) {
@@ -231,10 +253,10 @@ class EmployeesController extends BaseController
             // Log audit
             $this->logAudit('DELETE', 'employees', $id, $employee, null);
 
-            return redirect()->to('/employees')->with('success', 'Karyawan berhasil dihapus');
+            return $this->response->setJSON(['success' => true, 'message' => 'Team Member berhasil dihapus']);
         }
 
-        return redirect()->back()->with('error', 'Gagal menghapus karyawan');
+        return $this->response->setStatusCode(500)->setJSON(['success' => false, 'message' => 'Gagal menghapus karyawan']);
     }
 
     /**

@@ -106,12 +106,40 @@
                                             data-posisi="<?= htmlspecialchars($emp['posisi'], ENT_QUOTES) ?>"
                                             data-mulai="<?= htmlspecialchars($tglMulai, ENT_QUOTES) ?>"
                                             data-selesai="<?= htmlspecialchars($tglSelesai, ENT_QUOTES) ?>"
+                                            data-nomor-penilaian="<?= $siklus ?>"
                                             onclick="openEvalModalFromBtn(this)"
                                             class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition flex items-center gap-1.5">
                                         <i class="fas fa-star text-xs"></i> Nilai (ke-<?= $siklus ?>)
                                     </button>
                                 <?php else: ?>
-                                    <span class="text-gray-400 text-sm">Sudah dinilai</span>
+                                    <div class="flex flex-col gap-1.5">
+                                        <?php if (!empty($emp['eval1_id'])): ?>
+                                            <a href="/evaluations/<?= $emp['eval1_id'] ?>"
+                                               class="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-semibold rounded-lg transition flex items-center gap-1.5">
+                                                <i class="fas fa-eye text-xs"></i> Penilaian 1
+                                            </a>
+                                        <?php endif; ?>
+                                        <?php if (!empty($emp['eval2_id'])): ?>
+                                            <a href="/evaluations/<?= $emp['eval2_id'] ?>"
+                                               class="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 text-xs font-semibold rounded-lg transition flex items-center gap-1.5">
+                                                <i class="fas fa-eye text-xs"></i> Penilaian 2
+                                            </a>
+                                        <?php endif; ?>
+                                        <?php if (!empty($emp['eval1_id']) && !empty($emp['eval2_id'])): ?>
+                                            <button onclick="pdfDownload('/reports/pdf-all/<?= $emp['id'] ?>')"
+                                               class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg transition flex items-center gap-1.5 cursor-pointer">
+                                                <i class="fas fa-file-pdf text-xs"></i> PDF Semua
+                                            </button>
+                                        <?php elseif (!empty($emp['eval1_id'])): ?>
+                                            <button onclick="pdfDownload('/reports/pdf/<?= $emp['eval1_id'] ?>')"
+                                               class="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold rounded-lg transition flex items-center gap-1.5 cursor-pointer">
+                                                <i class="fas fa-file-pdf text-xs"></i> PDF Ke-1
+                                            </button>
+                                        <?php endif; ?>
+                                        <?php if (empty($emp['eval1_id'])): ?>
+                                            <span class="text-gray-400 text-xs">Sudah dinilai</span>
+                                        <?php endif; ?>
+                                    </div>
                                 <?php endif; ?>
                             </td>
                         </tr>
@@ -155,7 +183,7 @@
                 <!-- Step 1 -->
                 <div class="flex flex-col items-center" style="min-width:80px">
                     <div id="si_1" class="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-300 bg-blue-600 text-white">1</div>
-                    <span class="text-xs font-semibold mt-1 text-blue-600" id="sl_1">Data Karyawan</span>
+                    <span class="text-xs font-semibold mt-1 text-blue-600" id="sl_1">Data Team Member</span>
                 </div>
                 <div id="line_1" class="flex-1 h-0.5 mb-4 bg-gray-200 transition-all duration-300 mx-1"></div>
                 <!-- Step 2 -->
@@ -175,10 +203,10 @@
         <!-- Scrollable Step Content -->
         <div class="overflow-y-auto flex-1" id="evalScrollArea">
 
-            <!-- ===== STEP 1: Data Karyawan ===== -->
+            <!-- ===== STEP 1: Data Team Member ===== -->
             <div id="evalStep1" class="p-6">
                 <div class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-                    <h4 class="text-lg font-bold text-gray-900 mb-5">Data Karyawan</h4>
+                    <h4 class="text-lg font-bold text-gray-900 mb-5">Data Team Member</h4>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-600 mb-1.5">Nama Lengkap</label>
@@ -224,22 +252,30 @@
             <div id="evalStep2" class="hidden p-6 space-y-6">
                 <?php
                 $aspects = [
-                    'Kinerja & Produktivitas' => [
-                        'Kemampuan menyelesaikan tugas tepat waktu',
-                        'Kualitas hasil kerja',
-                        'Inisiatif dalam bekerja',
-                        'Kemampuan problem solving',
+                    'A. Pengetahuan Akan Tugas (Knowledge)' => [
+                        'Pengetahuan tentang penggunaan & pemeliharaan perangkat kerja (tools) e.g. mesin, komputer dll.',
+                        'Mengerti & memahami prosedur kerja standar (SOP) yang harus dijalankan.',
+                        'Mengerti & memahami standar kualitas kerja yang diterapkan perusahaan.',
+                        'Mengetahui proses pembuatan sepatu secara umum.',
                     ],
-                    'Kedisiplinan' => [
-                        'Kehadiran dan ketepatan waktu',
-                        'Kepatuhan terhadap prosedur kerja',
-                        'Penggunaan waktu kerja yang efektif',
+                    'B. Keahlian Kerja (Technical Skill)' => [
+                        'Keahlian dalam menjalankan fungsi kerja utama (e.g. cutting, sewing dll.).',
+                        'Mampu mengoperasikan perangkat kerja (tools) e.g. mesin, kuas, lem dll.',
+                        'Bekerja sesuai dengan prosedur kerja standar (SOP) dengan benar/secara keseluruhan.',
+                        'Bekerja secara cepat & teliti sesuai dengan target (kuantitas dan kualitas).',
+                        'Mampu memenuhi standar kualitas kerja yang diterapkan oleh perusahaan.',
+                        'Pengelolaan & pemeliharaan perangkat kerja (tools) e.g. mesin, kuas, lem dll.',
                     ],
-                    'Sikap & Perilaku' => [
-                        'Kerjasama dalam tim',
-                        'Komunikasi dengan rekan kerja',
-                        'Sikap dan etika kerja',
-                        'Kemampuan menerima feedback',
+                    'C. Sikap Kerja (Attitude)' => [
+                        'Mampu menjalankan disiplin kerja yang ada di departemen (e.g. jam kerja, seragam, APD dll.).',
+                        'Memiliki sikap dan perilaku kerja yang sesuai dengan NCOC.',
+                        'Menunjukkan sikap tidak mudah menyerah dalam menghadapi kesulitan saat bekerja sehari-hari.',
+                        'Jujur dalam menjalankan tugasnya.',
+                    ],
+                    'D. Kemampuan Diri (Interpersonal Skill)' => [
+                        'Mampu bersosialisasi & bekerja sama dengan rekan kerja yang lain.',
+                        'Berani mengungkapkan pendapat kepada orang lain, baik rekan kerja ataupun atasan.',
+                        'Bersedia menerima masukan dan pendapat dari orang lain, baik rekan kerja atau atasan.',
                     ],
                 ];
                 $gIdx = 0;
@@ -264,12 +300,49 @@
                                             </button>
                                         <?php endfor; ?>
                                     </div>
+                                    <p id="alasan_note_<?= $gIdx ?>" class="hidden text-xs text-red-600 mt-1.5 italic truncate"></p>
                                 </div>
                                 <?php $gIdx++; ?>
                             <?php endforeach; ?>
                         </div>
                     </div>
                 <?php endforeach; ?>
+
+                <!-- Panduan Norma Penilaian -->
+                <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 shadow-sm">
+                    <h5 class="font-bold text-blue-900 mb-3 text-sm">Panduan Norma Penilaian</h5>
+                    <table class="w-full text-xs">
+                        <thead>
+                            <tr class="bg-blue-700 text-white">
+                                <th class="text-left px-3 py-2 rounded-tl-lg">Keterangan</th>
+                                <th class="text-center px-3 py-2 rounded-tr-lg w-20">Nilai</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="border-b border-blue-200">
+                                <td class="px-3 py-1.5 text-blue-900">Performance selalu melebihi harapan dan persyaratan kerja</td>
+                                <td class="px-3 py-1.5 text-center font-bold text-green-700">9 – 10</td>
+                            </tr>
+                            <tr class="border-b border-blue-200 bg-blue-50/50">
+                                <td class="px-3 py-1.5 text-blue-900">Performance memenuhi harapan dan persyaratan kerja</td>
+                                <td class="px-3 py-1.5 text-center font-bold text-blue-700">7 – 8</td>
+                            </tr>
+                            <tr class="border-b border-blue-200">
+                                <td class="px-3 py-1.5 text-blue-900">Performance sebagian besar memenuhi harapan dan persyaratan kerja</td>
+                                <td class="px-3 py-1.5 text-center font-bold text-blue-600">6</td>
+                            </tr>
+                            <tr class="border-b border-blue-200 bg-blue-50/50">
+                                <td class="px-3 py-1.5 text-blue-900">Performance hampir sebagian besar tidak memenuhi harapan</td>
+                                <td class="px-3 py-1.5 text-center font-bold text-orange-600">3 – 5</td>
+                            </tr>
+                            <tr>
+                                <td class="px-3 py-1.5 text-blue-900">Performance tidak memenuhi harapan dan persyaratan kerja</td>
+                                <td class="px-3 py-1.5 text-center font-bold text-red-600">0 – 2</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="text-xs text-blue-800 mt-2 font-semibold">*) Standar Kelulusan: Nilai Rata-Rata ≥ 6</p>
+                </div>
 
                 <!-- Catatan -->
                 <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
@@ -329,25 +402,77 @@
     <div id="form_hidden_inputs"></div>
 </form>
 
+<!-- Modal Alasan Nilai Rendah -->
+<div id="lowScoreModal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 z-10">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-exclamation-triangle text-red-600"></i>
+            </div>
+            <div>
+                <h4 class="text-base font-bold text-gray-900">Alasan Nilai Rendah</h4>
+                <p class="text-xs text-gray-500 mt-0.5">Nilai di bawah 6 memerlukan penjelasan</p>
+            </div>
+        </div>
+        <div class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
+            <p class="text-xs text-amber-800 font-medium">Aspek:</p>
+            <p id="lowScoreAspekLabel" class="text-sm text-amber-900 font-semibold mt-0.5"></p>
+            <p class="text-xs text-amber-700 mt-1">Nilai yang dipilih: <span id="lowScoreNilai" class="font-bold text-red-600"></span></p>
+        </div>
+        <div class="mb-5">
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">
+                Jelaskan alasan pemberian nilai ini <span class="text-red-500">*</span>
+            </label>
+            <textarea id="lowScoreAlasan" rows="4" maxlength="500"
+                      placeholder="Tuliskan alasan mengapa aspek ini mendapat nilai di bawah 6..."
+                      class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-400 outline-none text-sm resize-none transition"></textarea>
+            <p id="lowScoreAlasanErr" class="hidden text-xs text-red-500 mt-1">Alasan wajib diisi (min. 10 karakter)</p>
+        </div>
+        <div class="flex gap-3">
+            <button type="button" onclick="cancelLowScore()"
+                    class="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-sm rounded-xl transition">
+                Batal
+            </button>
+            <button type="button" onclick="confirmLowScore()"
+                    class="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold text-sm rounded-xl transition">
+                Konfirmasi Nilai
+            </button>
+        </div>
+    </div>
+</div>
+
 <script>
-// ===== Aspect definitions (mirrors PHP) =====
+// ===== Aspect definitions — sesuai Form Penilaian Probation Team Member =====
 var ASPECTS = [
-    { cat: 'Kinerja & Produktivitas', label: 'Kemampuan menyelesaikan tugas tepat waktu' },
-    { cat: 'Kinerja & Produktivitas', label: 'Kualitas hasil kerja' },
-    { cat: 'Kinerja & Produktivitas', label: 'Inisiatif dalam bekerja' },
-    { cat: 'Kinerja & Produktivitas', label: 'Kemampuan problem solving' },
-    { cat: 'Kedisiplinan',            label: 'Kehadiran dan ketepatan waktu' },
-    { cat: 'Kedisiplinan',            label: 'Kepatuhan terhadap prosedur kerja' },
-    { cat: 'Kedisiplinan',            label: 'Penggunaan waktu kerja yang efektif' },
-    { cat: 'Sikap & Perilaku',        label: 'Kerjasama dalam tim' },
-    { cat: 'Sikap & Perilaku',        label: 'Komunikasi dengan rekan kerja' },
-    { cat: 'Sikap & Perilaku',        label: 'Sikap dan etika kerja' },
-    { cat: 'Sikap & Perilaku',        label: 'Kemampuan menerima feedback' },
+    { cat: 'A. Pengetahuan Akan Tugas (Knowledge)', label: 'Pengetahuan tentang penggunaan & pemeliharaan perangkat kerja (tools) e.g. mesin, komputer dll.' },
+    { cat: 'A. Pengetahuan Akan Tugas (Knowledge)', label: 'Mengerti & memahami prosedur kerja standar (SOP) yang harus dijalankan.' },
+    { cat: 'A. Pengetahuan Akan Tugas (Knowledge)', label: 'Mengerti & memahami standar kualitas kerja yang diterapkan perusahaan.' },
+    { cat: 'A. Pengetahuan Akan Tugas (Knowledge)', label: 'Mengetahui proses pembuatan sepatu secara umum.' },
+    { cat: 'B. Keahlian Kerja (Technical Skill)', label: 'Keahlian dalam menjalankan fungsi kerja utama (e.g. cutting, sewing dll.).' },
+    { cat: 'B. Keahlian Kerja (Technical Skill)', label: 'Mampu mengoperasikan perangkat kerja (tools) e.g. mesin, kuas, lem dll.' },
+    { cat: 'B. Keahlian Kerja (Technical Skill)', label: 'Bekerja sesuai dengan prosedur kerja standar (SOP) dengan benar/secara keseluruhan.' },
+    { cat: 'B. Keahlian Kerja (Technical Skill)', label: 'Bekerja secara cepat & teliti sesuai dengan target (kuantitas dan kualitas).' },
+    { cat: 'B. Keahlian Kerja (Technical Skill)', label: 'Mampu memenuhi standar kualitas kerja yang diterapkan oleh perusahaan.' },
+    { cat: 'B. Keahlian Kerja (Technical Skill)', label: 'Pengelolaan & pemeliharaan perangkat kerja (tools) e.g. mesin, kuas, lem dll.' },
+    { cat: 'C. Sikap Kerja (Attitude)', label: 'Mampu menjalankan disiplin kerja yang ada di departemen (e.g. jam kerja, seragam, APD dll.).' },
+    { cat: 'C. Sikap Kerja (Attitude)', label: 'Memiliki sikap dan perilaku kerja yang sesuai dengan NCOC.' },
+    { cat: 'C. Sikap Kerja (Attitude)', label: 'Menunjukkan sikap tidak mudah menyerah dalam menghadapi kesulitan saat bekerja sehari-hari.' },
+    { cat: 'C. Sikap Kerja (Attitude)', label: 'Jujur dalam menjalankan tugasnya.' },
+    { cat: 'D. Kemampuan Diri (Interpersonal Skill)', label: 'Mampu bersosialisasi & bekerja sama dengan rekan kerja yang lain.' },
+    { cat: 'D. Kemampuan Diri (Interpersonal Skill)', label: 'Berani mengungkapkan pendapat kepada orang lain, baik rekan kerja ataupun atasan.' },
+    { cat: 'D. Kemampuan Diri (Interpersonal Skill)', label: 'Bersedia menerima masukan dan pendapat dari orang lain, baik rekan kerja atau atasan.' },
 ];
 
-var evalScores   = new Array(ASPECTS.length).fill(0);
-var evalEmpId    = null;
-var currentStep  = 1;
+var evalScores        = new Array(ASPECTS.length).fill(0);
+var evalAlasan        = new Array(ASPECTS.length).fill('');
+var evalEmpId         = null;
+var evalNomorPenilaian = 1;
+var currentStep       = 1;
+
+// Pending low-score state
+var pendingLowScoreIdx   = null;
+var pendingLowScoreValue = null;
 
 // ===== Open / Close =====
 function openEvalModalFromBtn(btn) {
@@ -358,13 +483,18 @@ function openEvalModalFromBtn(btn) {
         btn.dataset.dept,
         btn.dataset.posisi,
         btn.dataset.mulai,
-        btn.dataset.selesai
+        btn.dataset.selesai,
+        btn.dataset.nomorPenilaian
     );
 }
 
-function openEvalModal(id, nik, nama, dept, posisi, mulai, selesai) {
+function openEvalModal(id, nik, nama, dept, posisi, mulai, selesai, nomorPenilaian) {
     evalEmpId = id;
+    evalNomorPenilaian = parseInt(nomorPenilaian) || 1;
     evalScores = new Array(ASPECTS.length).fill(0);
+    evalAlasan = new Array(ASPECTS.length).fill('');
+    pendingLowScoreIdx = null;
+    pendingLowScoreValue = null;
 
     document.getElementById('eval_subtitle').textContent = nama + ' (' + nik + ')';
     document.getElementById('e1_nama').value   = nama;
@@ -406,6 +536,16 @@ function goToStep(step, skipValidation) {
         var zeros = evalScores.filter(function(s) { return s === 0; }).length;
         if (zeros > 0) {
             showToast(zeros + ' aspek belum diberi nilai. Silakan isi semua aspek terlebih dahulu.', 'warning', 5000);
+            return;
+        }
+        var missingAlasan = [];
+        for (var k = 0; k < evalScores.length; k++) {
+            if (evalScores[k] > 0 && evalScores[k] < 6 && !evalAlasan[k]) {
+                missingAlasan.push(ASPECTS[k].label);
+            }
+        }
+        if (missingAlasan.length > 0) {
+            showToast(missingAlasan.length + ' aspek dengan nilai rendah belum diberi alasan.', 'warning', 5000);
             return;
         }
     }
@@ -451,16 +591,68 @@ function updateStepIndicator(active) {
 
 // ===== Score Buttons =====
 function setScore(idx, value) {
+    if (value > 0 && value < 6) {
+        // Tampilkan modal alasan sebelum menetapkan nilai
+        pendingLowScoreIdx   = idx;
+        pendingLowScoreValue = value;
+        document.getElementById('lowScoreAspekLabel').textContent = ASPECTS[idx].label;
+        document.getElementById('lowScoreNilai').textContent = value;
+        document.getElementById('lowScoreAlasan').value = evalAlasan[idx] || '';
+        document.getElementById('lowScoreAlasanErr').classList.add('hidden');
+        document.getElementById('lowScoreModal').classList.remove('hidden');
+        setTimeout(function() { document.getElementById('lowScoreAlasan').focus(); }, 100);
+        return;
+    }
+    applyScore(idx, value);
+}
+
+function applyScore(idx, value) {
     evalScores[idx] = value;
+    if (value === 0 || value >= 6) evalAlasan[idx] = '';
     for (var s = 0; s <= 10; s++) {
         var btn = document.getElementById('sb_' + idx + '_' + s);
         if (!btn) continue;
         if (s === value) {
-            btn.className = 'score-btn w-10 h-10 rounded-lg font-bold text-sm transition-all bg-blue-600 text-white shadow-md';
-        } else {
+            var cls = value > 0 && value < 6
+                ? 'score-btn w-10 h-10 rounded-lg font-bold text-sm transition-all bg-red-600 text-white shadow-md'
+                : 'score-btn w-10 h-10 rounded-lg font-bold text-sm transition-all bg-blue-600 text-white shadow-md';
+            btn.className = cls;
+        } else if (s === 0 && value !== 0) {
             btn.className = 'score-btn w-10 h-10 rounded-lg font-bold text-sm transition-all bg-gray-100 text-gray-600 hover:bg-gray-200';
+        } else {
+            btn.className = 'score-btn w-10 h-10 rounded-lg font-bold text-sm transition-all ' +
+                (s === 0 ? 'bg-red-500 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200');
         }
     }
+    // Tampilkan indikator alasan di bawah aspek jika nilai rendah
+    var noteEl = document.getElementById('alasan_note_' + idx);
+    if (noteEl) {
+        if (value > 0 && value < 6 && evalAlasan[idx]) {
+            noteEl.textContent = 'Alasan: ' + evalAlasan[idx];
+            noteEl.classList.remove('hidden');
+        } else {
+            noteEl.classList.add('hidden');
+        }
+    }
+}
+
+function confirmLowScore() {
+    var alasan = document.getElementById('lowScoreAlasan').value.trim();
+    if (alasan.length < 10) {
+        document.getElementById('lowScoreAlasanErr').classList.remove('hidden');
+        return;
+    }
+    evalAlasan[pendingLowScoreIdx] = alasan;
+    applyScore(pendingLowScoreIdx, pendingLowScoreValue);
+    document.getElementById('lowScoreModal').classList.add('hidden');
+    pendingLowScoreIdx   = null;
+    pendingLowScoreValue = null;
+}
+
+function cancelLowScore() {
+    document.getElementById('lowScoreModal').classList.add('hidden');
+    pendingLowScoreIdx   = null;
+    pendingLowScoreValue = null;
 }
 
 // ===== Build Summary (Step 3) =====
@@ -473,7 +665,7 @@ function buildSummary() {
     var cats = {};
     ASPECTS.forEach(function(a, i) {
         if (!cats[a.cat]) cats[a.cat] = [];
-        cats[a.cat].push({ label: a.label, score: evalScores[i] });
+        cats[a.cat].push({ label: a.label, score: evalScores[i], alasan: evalAlasan[i] });
     });
 
     var html = '';
@@ -489,9 +681,14 @@ function buildSummary() {
         items.forEach(function(item) {
             var sc = item.score;
             var sc_color = sc >= 8 ? 'text-green-600' : sc >= 6 ? 'text-blue-600' : 'text-red-600';
-            html += '<div class="flex justify-between py-1.5 border-b border-gray-100 last:border-0">';
+            html += '<div class="py-1.5 border-b border-gray-100 last:border-0">';
+            html += '<div class="flex justify-between">';
             html += '<span class="text-sm text-gray-600">' + item.label + '</span>';
             html += '<span class="text-sm font-semibold ' + sc_color + '">' + sc + '</span>';
+            html += '</div>';
+            if (item.alasan) {
+                html += '<p class="text-xs text-red-500 italic mt-0.5">Alasan: ' + item.alasan + '</p>';
+            }
             html += '</div>';
         });
         html += '</div>';
@@ -509,15 +706,16 @@ function submitEvaluation() {
     var html = '';
     for (var i = 0; i < ASPECTS.length; i++) {
         html += '<input type="hidden" name="scores[]" value="' + evalScores[i] + '">';
-        html += '<input type="hidden" name="alasan[]" value="">';
+        html += '<input type="hidden" name="alasan[]" value="' + escHtml(evalAlasan[i]) + '">';
         html += '<input type="hidden" name="details[' + i + '][kategori]" value="' + escHtml(ASPECTS[i].cat) + '">';
         html += '<input type="hidden" name="details[' + i + '][aspek]" value="' + escHtml(ASPECTS[i].label) + '">';
         html += '<input type="hidden" name="details[' + i + '][nilai]" value="' + evalScores[i] + '">';
-        html += '<input type="hidden" name="details[' + i + '][alasan]" value="">';
+        html += '<input type="hidden" name="details[' + i + '][alasan]" value="' + escHtml(evalAlasan[i]) + '">';
     }
     html += '<input type="hidden" name="catatan_team_leader" value="' + escHtml(document.getElementById('eval_catatan').value) + '">';
     html += '<input type="hidden" name="tanggal_mulai_penilaian" value="' + escHtml(document.getElementById('e1_mulai').value) + '">';
     html += '<input type="hidden" name="tanggal_selesai_penilaian" value="' + escHtml(document.getElementById('e1_selesai').value) + '">';
+    html += '<input type="hidden" name="nomor_penilaian" value="' + evalNomorPenilaian + '">';
 
     document.getElementById('form_hidden_inputs').innerHTML = html;
     form.submit();

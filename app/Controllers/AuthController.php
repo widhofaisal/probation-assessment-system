@@ -25,7 +25,7 @@ class AuthController extends BaseController
         }
 
         $data = [
-            'title' => 'Login - HR System',
+            'title' => 'Login',
             'errorMsg' => session()->getFlashdata('errorMsg'),
         ];
 

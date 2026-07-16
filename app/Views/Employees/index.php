@@ -9,7 +9,7 @@ $bulanId = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 
 <div class="mb-6 bg-white rounded-xl shadow p-5">
     <div class="flex flex-col md:flex-row gap-3 items-end">
         <div class="flex-1">
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">Cari Karyawan</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">Cari Team Member</label>
             <div class="relative">
                 <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
                 <input type="text" id="searchInput" placeholder="Cari NIK atau nama..."
@@ -38,7 +38,7 @@ $bulanId = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 
             </select>
         </div>
         <button onclick="openAddModal()" class="flex-shrink-0 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-sm flex items-center gap-2 transition">
-            <i class="fas fa-plus"></i> Tambah Karyawan
+            <i class="fas fa-plus"></i> Tambah Team Member
         </button>
     </div>
 </div>
@@ -46,7 +46,7 @@ $bulanId = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 
 <!-- Employees Table -->
 <div class="bg-white rounded-xl shadow overflow-hidden">
     <div class="px-6 py-4 border-b flex items-center justify-between">
-        <h3 class="text-lg font-bold text-gray-900">Daftar Karyawan Probation</h3>
+        <h3 class="text-lg font-bold text-gray-900">Daftar Team Member Probation</h3>
         <span id="rowCount" class="text-sm text-gray-500"></span>
     </div>
     <div class="overflow-x-auto">
@@ -78,22 +78,52 @@ $bulanId = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 
                             data-email="<?= htmlspecialchars($emp['email'] ?? '') ?>"
                             data-tanggal_masuk="<?= htmlspecialchars($emp['tanggal_masuk'] ?? '') ?>"
                             data-mulai_probation="<?= htmlspecialchars($emp['mulai_probation'] ?? '') ?>"
-                            data-team_leader_id="<?= htmlspecialchars($emp['team_leader_id'] ?? '') ?>">
+                            data-team_leader_id="<?= htmlspecialchars($emp['team_leader_id'] ?? '') ?>"
+                            data-jenis_kelamin="<?= htmlspecialchars($emp['jenis_kelamin'] ?? '') ?>"
+                            data-tanggal_lahir="<?= htmlspecialchars($emp['tanggal_lahir'] ?? '') ?>"
+                            data-alamat="<?= htmlspecialchars($emp['alamat'] ?? '') ?>">
                             <td class="px-6 py-4 font-medium text-gray-900 text-sm"><?= htmlspecialchars($emp['nik']) ?></td>
                             <td class="px-6 py-4 text-gray-800 text-sm"><?= htmlspecialchars($emp['nama']) ?></td>
                             <td class="px-6 py-4 text-gray-600 text-sm"><?= htmlspecialchars($emp['departemen']) ?></td>
                             <td class="px-6 py-4 text-gray-600 text-sm"><?= htmlspecialchars($emp['posisi']) ?></td>
                             <td class="px-6 py-4 text-gray-600 text-sm"><?= $tglProbation ?></td>
                             <td class="px-6 py-4">
-                                <span class="px-2.5 py-1 rounded-full text-xs font-semibold
-                                    <?php
-                                    if ($emp['status'] === 'pending') echo 'bg-yellow-100 text-yellow-700';
-                                    elseif ($emp['status'] === 'lulus') echo 'bg-green-100 text-green-700';
-                                    elseif ($emp['status'] === 'tidak-lulus') echo 'bg-red-100 text-red-700';
-                                    else echo 'bg-orange-100 text-orange-700';
-                                    ?>">
-                                    <?= ucfirst(str_replace('-', ' ', $emp['status'])) ?>
+                                <?php
+                                $n = $emp['total_penilaian'];
+                                if ($emp['status'] === 'pending') {
+                                    if ($n === 0) {
+                                        $badgeClass = 'bg-yellow-100 text-yellow-700';
+                                        $badgeText  = 'Pending';
+                                        $subText    = 'Belum dinilai';
+                                    } elseif ($n === 1) {
+                                        $badgeClass = 'bg-blue-100 text-blue-700';
+                                        $badgeText  = 'Pending';
+                                        $subText    = 'Sudah dinilai 1x';
+                                    } else {
+                                        $badgeClass = 'bg-purple-100 text-purple-700';
+                                        $badgeText  = 'Pending';
+                                        $subText    = 'Sudah dinilai 2x – tunggu keputusan HRD';
+                                    }
+                                } elseif ($emp['status'] === 'lulus') {
+                                    $badgeClass = 'bg-green-100 text-green-700';
+                                    $badgeText  = 'Lulus';
+                                    $subText    = '';
+                                } elseif ($emp['status'] === 'tidak-lulus') {
+                                    $badgeClass = 'bg-red-100 text-red-700';
+                                    $badgeText  = 'Tidak Lulus';
+                                    $subText    = '';
+                                } else {
+                                    $badgeClass = 'bg-orange-100 text-orange-700';
+                                    $badgeText  = 'Warning';
+                                    $subText    = '';
+                                }
+                                ?>
+                                <span class="px-2.5 py-1 rounded-full text-xs font-semibold <?= $badgeClass ?>">
+                                    <?= $badgeText ?>
                                 </span>
+                                <?php if ($subText): ?>
+                                    <p class="text-xs text-gray-400 mt-1"><?= $subText ?></p>
+                                <?php endif; ?>
                             </td>
                             <td class="px-6 py-4">
                                 <div class="flex gap-3">
@@ -132,7 +162,7 @@ $bulanId = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 
     <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto modal-enter">
         <div class="flex items-center justify-between px-6 py-4 border-b sticky top-0 bg-white rounded-t-2xl z-10">
             <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
-                <i class="fas fa-user-plus text-blue-600"></i> Tambah Karyawan Baru
+                <i class="fas fa-user-plus text-blue-600"></i> Tambah Team Member Baru
             </h3>
             <button onclick="closeAddModal()" class="text-gray-400 hover:text-gray-600 transition w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100">
                 <i class="fas fa-times"></i>
@@ -188,6 +218,25 @@ $bulanId = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 
                     <p class="hidden text-xs text-red-500 mt-1" id="aerr_probation">Tanggal mulai probation wajib diisi</p>
                     <p class="text-xs text-gray-400 mt-1">Akhir probation otomatis dihitung 90 hari sejak tanggal ini</p>
                 </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Jenis Kelamin</label>
+                    <select name="jenis_kelamin" id="a_jenis_kelamin"
+                            class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm transition">
+                        <option value="">-- Pilih --</option>
+                        <option value="L">Laki-laki</option>
+                        <option value="P">Perempuan</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Tanggal Lahir</label>
+                    <input type="date" name="tanggal_lahir" id="a_tanggal_lahir"
+                           class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm transition">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Alamat</label>
+                    <textarea name="alamat" id="a_alamat" rows="2" placeholder="Alamat lengkap"
+                              class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm transition resize-none"></textarea>
+                </div>
                 <div class="md:col-span-2">
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Team Leader</label>
                     <select name="team_leader_id"
@@ -209,7 +258,7 @@ $bulanId = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 
             </div>
             <div class="flex gap-3 pt-2 border-t">
                 <button type="submit" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition flex items-center gap-2">
-                    <i class="fas fa-save"></i> Simpan Karyawan
+                    <i class="fas fa-save"></i> Simpan Team Member
                 </button>
                 <button type="button" onclick="closeAddModal()" class="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-lg transition">
                     Batal
@@ -225,7 +274,7 @@ $bulanId = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 
     <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto modal-enter">
         <div class="flex items-center justify-between px-6 py-4 border-b sticky top-0 bg-white rounded-t-2xl z-10">
             <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
-                <i class="fas fa-user-edit text-blue-600"></i> Edit Data Karyawan
+                <i class="fas fa-user-edit text-blue-600"></i> Edit Data Team Member
             </h3>
             <button onclick="closeEditModal()" class="text-gray-400 hover:text-gray-600 transition w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100">
                 <i class="fas fa-times"></i>
@@ -301,6 +350,25 @@ $bulanId = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 
                         <?php endforeach; ?>
                     </select>
                 </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Jenis Kelamin</label>
+                    <select name="jenis_kelamin" id="e_jenis_kelamin"
+                            class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm transition">
+                        <option value="">-- Pilih --</option>
+                        <option value="L">Laki-laki</option>
+                        <option value="P">Perempuan</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Tanggal Lahir</label>
+                    <input type="date" name="tanggal_lahir" id="e_tanggal_lahir"
+                           class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm transition">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Alamat</label>
+                    <textarea name="alamat" id="e_alamat" rows="2"
+                              class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm transition resize-none"></textarea>
+                </div>
             </div>
             <div class="flex gap-3 pt-2 border-t">
                 <button type="submit" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition flex items-center gap-2">
@@ -333,12 +401,18 @@ function openEditModal(id) {
     if (!row) return;
 
     document.getElementById('editEmployeeForm').action = '/employees/' + id;
-    document.getElementById('e_nik').value           = row.querySelector('td:nth-child(1)').textContent.trim();
-    document.getElementById('e_nama').value          = row.dataset.nama ? row.querySelector('td:nth-child(2)').textContent.trim() : '';
-    document.getElementById('e_posisi').value        = row.dataset.posisi || '';
-    document.getElementById('e_email').value         = row.dataset.email || '';
-    document.getElementById('e_tanggal_masuk').value = row.dataset.tanggal_masuk || '';
+    document.getElementById('e_nik').value             = row.querySelector('td:nth-child(1)').textContent.trim();
+    document.getElementById('e_nama').value            = row.dataset.nama ? row.querySelector('td:nth-child(2)').textContent.trim() : '';
+    document.getElementById('e_posisi').value          = row.dataset.posisi || '';
+    document.getElementById('e_email').value           = row.dataset.email || '';
+    document.getElementById('e_tanggal_masuk').value   = row.dataset.tanggal_masuk || '';
     document.getElementById('e_mulai_probation').value = row.dataset.mulai_probation || '';
+    document.getElementById('e_tanggal_lahir').value   = row.dataset.tanggal_lahir || '';
+    document.getElementById('e_alamat').value          = row.dataset.alamat || '';
+
+    var jkSel = document.getElementById('e_jenis_kelamin');
+    for (var i = 0; i < jkSel.options.length; i++)
+        jkSel.options[i].selected = jkSel.options[i].value === (row.dataset.jenis_kelamin || '');
 
     const dept = row.dataset.dept || '';
     const deptSel = document.getElementById('e_departemen');
@@ -381,7 +455,8 @@ function setFieldError(inputId, errId, show) {
     if (el) { el.classList.toggle('border-red-400', show); el.classList.toggle('border-gray-300', !show); }
 }
 function clearAddErrors() {
-    [['a_nik','aerr_nik'],['a_nama','aerr_nama'],['a_departemen','aerr_departemen'],['a_posisi','aerr_posisi'],['a_email','aerr_email'],['a_mulai_probation','aerr_probation']]
+    [['a_nik','aerr_nik'],['a_nama','aerr_nama'],['a_departemen','aerr_departemen'],
+     ['a_posisi','aerr_posisi'],['a_email','aerr_email'],['a_mulai_probation','aerr_probation']]
         .forEach(function(p) { setFieldError(p[0], p[1], false); });
 }
 function clearEditErrors() {
@@ -446,16 +521,25 @@ function filterTable() {
 // ---- Delete ----
 function confirmDelete(id, nama) {
     showConfirm('Hapus karyawan "' + nama + '"? Data yang sudah dihapus tidak bisa dikembalikan.', function() {
-        fetch('/employees/' + id, { method: 'DELETE' })
-            .then(function(r) {
-                if (r.ok) {
-                    showToast('Karyawan berhasil dihapus.', 'success');
+        var csrfToken = document.querySelector('meta[name="csrf-token"]') ?
+                        document.querySelector('meta[name="csrf-token"]').getAttribute('content') : '';
+        fetch('/employees/' + id, {
+            method: 'DELETE',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': csrfToken
+            }
+        })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    showToast('Team Member berhasil dihapus.', 'success');
                     setTimeout(function() { location.reload(); }, 1200);
                 } else {
-                    showToast('Gagal menghapus karyawan.', 'error');
+                    showToast(data.message || 'Gagal menghapus karyawan.', 'error');
                 }
             })
-            .catch(function() { showToast('Terjadi kesalahan jaringan.', 'error'); });
+            .catch(function() { showToast('Gagal menghapus karyawan.', 'error'); });
     });
 }
 

@@ -1,5 +1,6 @@
 <?php $this->extend('layouts/main'); $this->section('content');
 $deptOptions = ['Production', 'Quality Control', 'Warehouse', 'Maintenance', 'Administration', 'Finance', 'Human Resources'];
+$roleAllowsPosisi = in_array($user['role'], ['hrd', 'team-leader']);
 ?>
 
 <div class="max-w-3xl mx-auto">
@@ -60,8 +61,16 @@ $deptOptions = ['Production', 'Quality Control', 'Warehouse', 'Maintenance', 'Ad
                            class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm transition">
                 </div>
 
+                <!-- Posisi -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Posisi / Jabatan</label>
+                    <input type="text" name="posisi" value="<?= htmlspecialchars($user['posisi'] ?? '') ?>"
+                           placeholder="Contoh: Supervisor Produksi"
+                           class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm transition">
+                </div>
+
                 <!-- Departemen (dropdown) -->
-                <div class="md:col-span-2">
+                <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Departemen</label>
                     <select name="departemen"
                             class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm transition">
@@ -70,6 +79,31 @@ $deptOptions = ['Production', 'Quality Control', 'Warehouse', 'Maintenance', 'Ad
                             <option value="<?= $d ?>" <?= ($user['departemen'] ?? '') === $d ? 'selected' : '' ?>><?= $d ?></option>
                         <?php endforeach; ?>
                     </select>
+                </div>
+
+                <!-- Jenis Kelamin -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Jenis Kelamin</label>
+                    <select name="jenis_kelamin"
+                            class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm transition">
+                        <option value="">-- Pilih --</option>
+                        <option value="L" <?= ($user['jenis_kelamin'] ?? '') === 'L' ? 'selected' : '' ?>>Laki-laki</option>
+                        <option value="P" <?= ($user['jenis_kelamin'] ?? '') === 'P' ? 'selected' : '' ?>>Perempuan</option>
+                    </select>
+                </div>
+
+                <!-- Tanggal Lahir -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Tanggal Lahir</label>
+                    <input type="date" name="tanggal_lahir" value="<?= htmlspecialchars($user['tanggal_lahir'] ?? '') ?>"
+                           class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm transition">
+                </div>
+
+                <!-- Alamat -->
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Alamat</label>
+                    <textarea name="alamat" rows="2" placeholder="Alamat lengkap"
+                              class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm transition resize-none"><?= htmlspecialchars($user['alamat'] ?? '') ?></textarea>
                 </div>
             </div>
 

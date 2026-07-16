@@ -1,0 +1,20 @@
+*HRD*
+NIK	Nama	Departemen	Posisi	Password
+HRD001	Siti Rahayu	Human Resources	HR Manager	password123
+Team Leader
+NIK	Nama	Departemen	Posisi	Password
+TL001	Ahmad Fauzi	Produksi	Supervisor Produksi	password123
+TL002	Dewi Anggraini	Quality Control	Supervisor QC	password123
+Probationary Employee
+Password default = NIK masing-masing
+
+NIK	Nama	Departemen	Posisi	Password
+EMP001	Budi Santoso	Produksi	Operator Produksi	EMP001
+EMP002	Rina Marlina	Produksi	Operator Produksi	EMP002
+EMP003	Joko Susilo	Produksi	Teknisi Mesin	EMP003
+EMP004	Sari Dewi	Produksi	Operator Produksi	EMP004
+EMP005	Hendra Wijaya	Produksi	Teknisi Mesin	EMP005
+EMP006	Fitri Handayani	Quality Control	Inspector QC	EMP006
+EMP007	Rizal Maulana	Quality Control	Inspector QC	EMP007
+EMP008	Yuni Astuti	Quality Control	Analis QC	EMP008
+EMP009	Doni Prasetyo	Quality Control	Inspector QC	EMP009

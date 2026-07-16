@@ -55,10 +55,13 @@ class ProfileController extends BaseController
         }
 
         $updateData = [
-            'nama'      => $nama,
-            'email'     => $email ?: null,
-            'departemen' => $departemen,
-            'posisi'    => $posisi,
+            'nama'          => $nama,
+            'email'         => $email ?: null,
+            'departemen'    => $departemen,
+            'posisi'        => $posisi,
+            'jenis_kelamin' => $this->request->getPost('jenis_kelamin') ?: null,
+            'tanggal_lahir' => $this->request->getPost('tanggal_lahir') ?: null,
+            'alamat'        => $this->request->getPost('alamat') ?: null,
         ];
 
         $this->userModel->skipValidation(true)->update($userId, $updateData);

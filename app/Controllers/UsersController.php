@@ -20,13 +20,12 @@ class UsersController extends BaseController
         }
 
         $users = $this->userModel
-            ->whereIn('role', ['hrd', 'team-leader'])
-            ->orderBy('role', 'ASC')
+            ->where('role', 'team-leader')
             ->orderBy('nama', 'ASC')
             ->findAll();
 
         return view('Users/index', [
-            'title' => 'Manajemen User',
+            'title' => 'Data Team Leader',
             'users' => $users,
         ]);
     }
@@ -50,13 +49,16 @@ class UsersController extends BaseController
         }
 
         $this->userModel->skipValidation(true)->insert([
-            'nik'           => $nik,
-            'nama'          => $this->request->getPost('nama'),
-            'email'         => $this->request->getPost('email') ?: null,
-            'password_hash' => UserModel::hashPassword($nik), // default password = NIK
-            'role'          => $role,
-            'departemen'    => $this->request->getPost('departemen') ?: null,
-            'posisi'        => $this->request->getPost('posisi') ?: null,
+            'nik'            => $nik,
+            'nama'           => $this->request->getPost('nama'),
+            'email'          => $this->request->getPost('email') ?: null,
+            'password_hash'  => UserModel::hashPassword($nik),
+            'role'           => $role,
+            'departemen'     => $this->request->getPost('departemen') ?: null,
+            'posisi'         => $this->request->getPost('posisi') ?: null,
+            'jenis_kelamin'  => $this->request->getPost('jenis_kelamin') ?: null,
+            'tanggal_lahir'  => $this->request->getPost('tanggal_lahir') ?: null,
+            'alamat'         => $this->request->getPost('alamat') ?: null,
         ]);
 
         return redirect()->to('/users')->with('success', 'User berhasil ditambahkan. Password default: ' . $nik);
@@ -87,12 +89,15 @@ class UsersController extends BaseController
         }
 
         $updateData = [
-            'nik'        => $nik,
-            'nama'       => $this->request->getPost('nama'),
-            'email'      => $this->request->getPost('email') ?: null,
-            'role'       => $this->request->getPost('role'),
-            'departemen' => $this->request->getPost('departemen') ?: null,
-            'posisi'     => $this->request->getPost('posisi') ?: null,
+            'nik'           => $nik,
+            'nama'          => $this->request->getPost('nama'),
+            'email'         => $this->request->getPost('email') ?: null,
+            'role'          => $this->request->getPost('role'),
+            'departemen'    => $this->request->getPost('departemen') ?: null,
+            'posisi'        => $this->request->getPost('posisi') ?: null,
+            'jenis_kelamin' => $this->request->getPost('jenis_kelamin') ?: null,
+            'tanggal_lahir' => $this->request->getPost('tanggal_lahir') ?: null,
+            'alamat'        => $this->request->getPost('alamat') ?: null,
         ];
 
         $this->userModel->skipValidation(true)->update($id, $updateData);

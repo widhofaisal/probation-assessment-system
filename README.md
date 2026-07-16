@@ -53,7 +53,7 @@ database.default.port = 3306
 mysql -u root -e "CREATE DATABASE hrd_system CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
 # Import schema & seed data
-mysql -u root hrd_system < migration_from_postgres.sql
+mysql -u root hrd_system < database_dump.sql
 ```
 
 **4. Jalankan server**
@@ -62,6 +62,66 @@ php spark serve
 ```
 
 Akses di: `http://localhost:8080`
+
+---
+
+## Deployment ke Hosting (InfinityFree)
+
+Codebase ini **plug-n-play** — file yang sama bisa jalan di lokal (`php spark serve`) maupun di shared hosting seperti InfinityFree, tanpa perlu mengubah `index.php`.
+
+### Perbedaan Layout
+
+| | Lokal | InfinityFree |
+|---|---|---|
+| Lokasi `app/`, `vendor/`, `writable/` | sejajar dengan `public/` | **di dalam** `htdocs/` (= `public/`) |
+| Konfigurasi env | `.env` di project root (CI4 DotEnv) | `env.local.php` di `htdocs/` (inject `$_ENV` langsung — `putenv()` di-disable) |
+| `RewriteBase` | tidak relevan (spark serve abaikan `.htaccess`) | `/` (sudah disetel) |
+
+`public/index.php` melakukan **auto-detect** layout dan mekanisme env, jadi cukup pilih salah satu pola di atas.
+
+### Langkah Deploy ke InfinityFree
+
+**1. Upload file via FileZilla** ke `htdocs/`:
+
+```
+htdocs/
+├── app/                ← upload dari ./app/
+├── vendor/             ← upload dari ./vendor/
+├── writable/           ← upload dari ./writable/
+├── index.php           ← upload dari ./public/index.php
+├── .htaccess           ← upload dari ./public/.htaccess
+├── favicon.ico, favicon.svg, robots.txt
+└── env.local.php       ← buat di langkah 2
+```
+
+> InfinityFree memberlakukan `open_basedir` yang membatasi PHP hanya bisa baca dari `htdocs/`, sehingga `app/`, `vendor/`, `writable/` **harus** berada di dalam `htdocs/`.
+
+**2. Buat `env.local.php` di `htdocs/`** — dua cara:
+
+- **Manual**: copy dari [env.local.php.example](env.local.php.example), edit kredensial database & `app.baseURL`, upload sebagai `htdocs/env.local.php`.
+- **Otomatis**: edit nilai konstanta di [public/setup_env.php](public/setup_env.php) (database, baseURL, dst.) sebelum upload, lalu akses sekali di browser:
+  ```
+  https://your-domain.infinityfreeapp.com/setup_env.php?key=rahasia123
+  ```
+  File `env.local.php` akan ter-generate otomatis di `htdocs/`. **Hapus `setup_env.php` setelah selesai.**
+
+**3. Import database** lewat phpMyAdmin (panel InfinityFree): import `database_dump.sql`.
+
+**4. Verifikasi (opsional)** — akses script debug, lalu **hapus** setelah dipakai:
+- `https://your-domain/debug_boot.php?key=rahasia123` — cek struktur folder & autoload
+- `https://your-domain/check_writable.php?key=rahasia123` — cek izin tulis di `writable/`
+
+**5. Hapus file sensitif dari server** setelah deploy stabil:
+- `setup_env.php`
+- `debug_boot.php`
+- `check_writable.php`
+
+> ⚠️ **Ganti `SETUP_KEY`** (`rahasia123`) di ketiga script di atas dengan string acak yang kuat sebelum upload.
+
+### Keamanan
+
+- `.env`, `env.local.php`, dan `database_dump.sql` sudah di-gitignore.
+- `.htaccess` memblokir akses langsung ke folder `app/`, `vendor/`, `writable/`, dan file `.env`.
 
 ---
 

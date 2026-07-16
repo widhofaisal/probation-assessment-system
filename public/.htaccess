@@ -1,6 +1,24 @@
 # Disable directory browsing
 Options -Indexes
 
+# Protect sensitive files and folders from direct web access
+<Files ".env">
+    Order allow,deny
+    Deny from all
+</Files>
+
+<IfModule mod_authz_core.c>
+    <DirectoryMatch "^.*(app|vendor|writable)/">
+        Require all denied
+    </DirectoryMatch>
+</IfModule>
+<IfModule !mod_authz_core.c>
+    <DirectoryMatch "^.*(app|vendor|writable)/">
+        Order allow,deny
+        Deny from all
+    </DirectoryMatch>
+</IfModule>
+
 # ----------------------------------------------------------------------
 # Rewrite engine
 # ----------------------------------------------------------------------
@@ -14,7 +32,7 @@ Options -Indexes
 	# If you installed CodeIgniter in a subfolder, you will need to
 	# change the following line to match the subfolder you need.
 	# http://httpd.apache.org/docs/current/mod/mod_rewrite.html#rewritebase
-	# RewriteBase /
+	RewriteBase /
 
 	# Redirect Trailing Slashes...
 	RewriteCond %{REQUEST_FILENAME} !-d
