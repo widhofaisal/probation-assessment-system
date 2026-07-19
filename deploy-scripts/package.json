@@ -1,0 +1,13 @@
+{
+  "name": "hrd-deploy-scripts",
+  "version": "1.0.0",
+  "description": "Deployment automation ke InfinityFree",
+  "scripts": {
+    "login":  "node 1-login.js",
+    "deploy": "node 2-deploy.js"
+  },
+  "dependencies": {
+    "basic-ftp": "^5.0.5",
+    "playwright": "^1.44.0"
+  }
+}

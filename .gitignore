@@ -131,6 +131,21 @@ _modules/*
 # Project Specific
 #-------------------------
 
+# Deploy scripts — generated files, credentials
+/deploy-scripts/session.json
+/deploy-scripts/secrets.json
+/deploy-scripts/deploy.config.json
+/deploy-scripts/node_modules/
+/deploy-scripts/_env_tmp.php
+/deploy-scripts/_scrape-db.js
+/deploy-scripts/_upload-env.js
+/deploy-scripts/_upload-changed.js
+/deploy-scripts/_clear-cache.js
+/deploy-scripts/_db-query.js
+/deploy-scripts/_run-sql.js
+/deploy-scripts/_generate-upload-pdf.js
+/deploy-scripts/_read-log.js
+
 # Database dump (berisi data sensitif)
 database_dump.sql
 

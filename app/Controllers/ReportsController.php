@@ -48,8 +48,14 @@ class ReportsController extends BaseController
         return view('Reports/view', $data);
     }
 
+    private function isWindows(): bool
+    {
+        return strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+    }
+
     /**
-     * Generate PDF — fill Word template via PowerShell/Word COM, fallback to DomPDF
+     * Generate PDF — always produces the full 2-page employee form (ke-1 + ke-2).
+     * Delegates to pdfAll() so the download is always the complete probation document.
      */
     public function generatePdf(int $id)
     {
@@ -64,48 +70,7 @@ class ReportsController extends BaseController
             return redirect()->back()->with('error', 'Akses ditolak');
         }
 
-        $nomor    = (int)($evaluation['nomor_penilaian'] ?? 1);
-        $filename = 'Penilaian_' . ($evaluation['nik'] ?? $id) . '_ke' . $nomor . '.pdf';
-
-        // --- Serve from cache if available ---
-        $pdfDir     = rtrim(WRITEPATH, '/\\') . DIRECTORY_SEPARATOR . 'pdfs';
-        $cachedPath = $pdfDir . DIRECTORY_SEPARATOR . 'eval_' . $id . '.pdf';
-
-        if (file_exists($cachedPath)) {
-            return $this->response
-                ->setHeader('Content-Type', 'application/pdf')
-                ->setHeader('Content-Disposition', 'inline; filename="' . $filename . '"')
-                ->setBody(file_get_contents($cachedPath));
-        }
-
-        // Attach flat details array for the Word COM script
-        $details = $this->evaluationDetailModel->where('penilaian_id', $id)->findAll();
-        $evaluation['details'] = $details;
-
-        // --- Primary: Word COM via PowerShell ---
-        $pdfPath = $this->generatePdfViaWordCom($evaluation);
-        if ($pdfPath && file_exists($pdfPath)) {
-            // Save to permanent cache
-            if (!is_dir($pdfDir)) mkdir($pdfDir, 0755, true);
-            rename($pdfPath, $cachedPath);
-
-            return $this->response
-                ->setHeader('Content-Type', 'application/pdf')
-                ->setHeader('Content-Disposition', 'inline; filename="' . $filename . '"')
-                ->setBody(file_get_contents($cachedPath));
-        }
-
-        // --- Fallback: DomPDF ---
-        $groupedDetails = $this->evaluationDetailModel->getByEvaluationGrouped($id);
-        $categoryScores = $this->evaluationDetailModel->getCategoryAverages($id);
-        $html           = $this->generatePdfHtml($evaluation, $groupedDetails, $categoryScores);
-
-        $dompdf = new \Dompdf\Dompdf();
-        $dompdf->loadHtml($html);
-        $dompdf->setPaper('A4', 'portrait');
-        $dompdf->render();
-        $filename = 'Penilaian_' . ($evaluation['nik'] ?? $id) . '_' . date('Y-m-d') . '.pdf';
-        $dompdf->stream($filename, ['Attachment' => false]);
+        return $this->pdfAll((int)$evaluation['employee_id']);
     }
 
     // ---------------------------------------------------------------
@@ -115,6 +80,7 @@ class ReportsController extends BaseController
     /**
      * Fill the Word template with evaluation data and export to PDF.
      * Returns the local PDF path on success, null on failure.
+     * Only called on Windows — caller must guard with isWindows().
      */
     private function generatePdfViaWordCom(array $eval): ?string
     {
@@ -331,18 +297,41 @@ class ReportsController extends BaseController
                 ->setBody(file_get_contents($cachedPath));
         }
 
-        $pdfPath = $this->generatePdfAllViaWordCom($eval1, $eval2);
-        if ($pdfPath && file_exists($pdfPath)) {
-            if (!is_dir($pdfDir)) mkdir($pdfDir, 0755, true);
-            rename($pdfPath, $cachedPath);
+        // --- Primary: Word COM via PowerShell (Windows only) ---
+        if ($this->isWindows()) {
+            $pdfPath = $this->generatePdfAllViaWordCom($eval1, $eval2);
+            if ($pdfPath && file_exists($pdfPath)) {
+                if (!is_dir($pdfDir)) mkdir($pdfDir, 0755, true);
+                rename($pdfPath, $cachedPath);
 
-            return $this->response
-                ->setHeader('Content-Type', 'application/pdf')
-                ->setHeader('Content-Disposition', 'inline; filename="' . $filename . '"')
-                ->setBody(file_get_contents($cachedPath));
+                return $this->response
+                    ->setHeader('Content-Type', 'application/pdf')
+                    ->setHeader('Content-Disposition', 'inline; filename="' . $filename . '"')
+                    ->setBody(file_get_contents($cachedPath));
+            }
         }
 
-        return redirect()->back()->with('error', 'Gagal menghasilkan PDF');
+        // --- Fallback: DomPDF ---
+        $grouped1 = $this->evaluationDetailModel->getByEvaluationGrouped($raw1['id']);
+        $grouped2 = $raw2 ? $this->evaluationDetailModel->getByEvaluationGrouped($raw2['id']) : null;
+        $html     = $this->generatePdfAllHtml($eval1, $eval2, $grouped1, $grouped2);
+
+        $opts = new \Dompdf\Options();
+        $opts->set('isHtml5ParserEnabled', true);
+        $opts->set('isRemoteEnabled', false);
+        $dompdf = new \Dompdf\Dompdf($opts);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+        $pdfContent = $dompdf->output();
+
+        if (!is_dir($pdfDir)) mkdir($pdfDir, 0755, true);
+        file_put_contents($cachedPath, $pdfContent);
+
+        return $this->response
+            ->setHeader('Content-Type', 'application/pdf')
+            ->setHeader('Content-Disposition', 'inline; filename="' . $filename . '"')
+            ->setBody($pdfContent);
     }
 
     private function generatePdfAllViaWordCom(array $eval1, ?array $eval2): ?string
@@ -495,169 +484,345 @@ class ReportsController extends BaseController
     }
 
     // ---------------------------------------------------------------
-    // DOMPDF FALLBACK
+    // DOMPDF HTML GENERATION
     // ---------------------------------------------------------------
 
-    /**
-     * Generate PDF HTML — fallback when Word COM is unavailable
-     */
-    protected function generatePdfHtml(array $evaluation, array $details, array $categoryScores): string
+    private function pdfCss(): string
     {
-        $nomorPenilaian = $evaluation['nomor_penilaian'] ?? 1;
-        $tanggalPenilaian = !empty($evaluation['tanggal_penilaian'])
+        return '<style>
+@page { margin:10mm 12mm 10mm 12mm; }
+* { box-sizing:border-box; }
+body { font-family:Arial,Helvetica,sans-serif; font-size:8pt; color:#000; margin:0; padding:0; }
+
+/* FORM HEADER */
+table.fh { width:100%; border-collapse:collapse; margin-bottom:4px; }
+table.fh td { border:1px solid #000; padding:2px 5px; vertical-align:middle; font-size:7.5pt; }
+.fh-logo { background:#D94F00; color:#fff; font-size:12pt; font-weight:bold; font-style:italic;
+           text-align:center; width:55px; letter-spacing:1pt; }
+.fh-form { text-align:center; font-weight:bold; font-size:8.5pt; width:52px; }
+.fh-key  { font-weight:bold; font-size:7pt; white-space:nowrap; }
+.fh-val  { font-size:7pt; }
+.fh-title { text-align:center; font-weight:bold; font-size:9pt; background:#ddd; padding:3px 0; }
+
+/* DATA KARYAWAN */
+.dk-title { text-align:center; font-weight:bold; font-size:8.5pt; margin:5px 0 3px; }
+table.dk  { width:100%; border-collapse:collapse; margin-bottom:3px; }
+table.dk td { padding:1px 3px; font-size:8pt; border:none; }
+.dk-lbl { width:17%; white-space:nowrap; }
+.dk-sep { width:2%; text-align:center; }
+.dk-val { width:31%; }
+
+/* NOTE */
+p.note { font-size:7pt; font-style:italic; margin:2px 0 3px; }
+
+/* TWO-COLUMN WRAPPER */
+table.tc { width:100%; border-collapse:collapse; }
+table.tc td { vertical-align:top; padding:0; }
+
+/* CATEGORY HEADER */
+p.cat { font-weight:bold; font-size:7.5pt; margin:4px 0 1px; text-transform:uppercase; }
+
+/* SCORE TABLE */
+table.sc { width:100%; border-collapse:collapse; margin-bottom:2px; }
+table.sc th { border:1px solid #000; background:#f0f0f0; padding:1px 3px; font-size:7pt; text-align:center; font-weight:bold; }
+table.sc td { border:1px solid #000; padding:1px 3px; font-size:7pt; vertical-align:top; }
+.sno  { text-align:center; width:16px; }
+.snl  { text-align:center; width:28px; }
+
+/* TOTAL */
+table.tot { width:100%; border-collapse:collapse; margin-top:3px; }
+table.tot td { border:1px solid #000; padding:2px 5px; font-weight:bold; font-size:8pt; }
+.tlb { text-align:center; }
+.tva { text-align:center; width:36px; }
+
+/* PANDUAN NORMA */
+table.nm { width:100%; border-collapse:collapse; margin-top:3px; }
+table.nm td { border:1px solid #000; padding:2px 4px; font-size:7.5pt; }
+.nhd  { font-weight:bold; background:#ddd; text-align:center; }
+.nhd2 { font-weight:bold; background:#f0f0f0; }
+.nva  { text-align:center; width:44px; white-space:nowrap; font-weight:bold; }
+
+/* HRD BOX */
+.hrd-box { border:1px solid #000; padding:6px 8px; margin-top:5px; font-size:8pt; line-height:1.8; }
+.hrd-line { display:inline-block; width:148px; border-bottom:1px solid #000; }
+
+/* SIGNATURES */
+table.sg { width:100%; border-collapse:collapse; margin-top:8px; }
+table.sg td { text-align:center; font-size:7.5pt; width:33%; padding:0 3px; vertical-align:top; border:none; }
+
+/* PEDOMAN */
+.pd-box  { border:1px solid #000; padding:5px 6px; margin-left:3px; }
+.pd-ttl  { font-weight:bold; font-size:7.5pt; text-align:center; margin-bottom:4px; }
+.pd-item { font-size:6.8pt; margin-bottom:4px; line-height:1.4; text-align:justify; }
+
+/* PAGE BREAK */
+.page-break { page-break-before:always; }
+</style>';
+    }
+
+    /**
+     * Render one sheet (ke-1 or ke-2) of the evaluation form as HTML.
+     */
+    protected function generatePdfHtmlSheet(array $evaluation, array $grouped, int $nomorSheet): string
+    {
+        $isSheet2 = $nomorSheet >= 2;
+
+        $tglPenilaian = !empty($evaluation['tanggal_penilaian'])
             ? date('d/m/Y', strtotime($evaluation['tanggal_penilaian'])) : '-';
-        $tanggalMasuk = !empty($evaluation['mulai_probation'])
+        $tglMasuk = !empty($evaluation['mulai_probation'])
             ? date('d/m/Y', strtotime($evaluation['mulai_probation'])) : '-';
 
-        $grouped = [];
-        foreach ($details as $d) {
-            $grouped[$d['kategori']][] = $d;
-        }
-
+        // $grouped is a flat array of rows from getByEvaluationGrouped()
         $totalNilai = 0;
         $totalAspek = 0;
-        foreach ($details as $d) {
-            $totalNilai += $d['nilai'];
+        foreach ($grouped as $row) {
+            $totalNilai += (int)($row['nilai'] ?? 0);
             $totalAspek++;
         }
-        $rataRata = $totalAspek > 0 ? round($totalNilai / $totalAspek, 2) : 0;
-        $lulus    = $rataRata >= 6;
+        $rataRata = $totalAspek > 0 ? number_format($totalNilai / $totalAspek, 2) : '0.00';
 
-        ob_start();
-        ?>
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<style>
-  body { font-family: Arial, sans-serif; font-size: 10pt; color: #000; margin: 15mm; }
-  .page-title { text-align: center; font-size: 13pt; font-weight: bold; margin-bottom: 4px; }
-  .badge { text-align: center; margin-bottom: 8px; }
-  .badge span { background: #1a56db; color: #fff; padding: 3px 12px; border-radius: 4px; font-size: 9pt; font-weight: bold; }
-  table.dk { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-  table.dk td { padding: 4px 6px; border: 1px solid #bbb; font-size: 9.5pt; }
-  table.dk td.lbl { font-weight: bold; width: 22%; background: #f0f4ff; }
-  .sec { font-size: 10pt; font-weight: bold; background: #1a56db; color: #fff; padding: 4px 8px; margin-top: 10px; }
-  table.sc { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
-  table.sc th { background: #dce8ff; font-size: 9pt; padding: 4px 6px; border: 1px solid #aaa; text-align: center; }
-  table.sc td { padding: 4px 6px; border: 1px solid #ccc; font-size: 9pt; vertical-align: top; }
-  .no { text-align: center; width: 5%; }
-  .val { text-align: center; width: 10%; font-weight: bold; }
-  .ok { color: #0b6e0b; } .lo { color: #c0000a; }
-  .tot td { font-weight: bold; background: #f0f4ff; }
-  .hasil { text-align: center; font-size: 11pt; font-weight: bold; margin: 8px 0; padding: 6px; border: 2px solid; }
-  .hasil.l { border-color: #0b6e0b; color: #0b6e0b; }
-  .hasil.t { border-color: #c0000a; color: #c0000a; }
-  table.norma { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 9pt; }
-  table.norma th { background: #1a56db; color: #fff; padding: 4px 8px; border: 1px solid #aaa; }
-  table.norma td { padding: 4px 8px; border: 1px solid #ccc; }
-  .ttd { width: 100%; margin-top: 18px; border-collapse: collapse; }
-  .ttd td { text-align: center; width: 33%; vertical-align: top; padding: 0 4px; font-size: 9pt; }
-  .ttd-line { border-bottom: 1px solid #000; margin: 60px 10px 4px; }
-  .pb { page-break-before: always; }
-  .hrd-box { border: 1px solid #bbb; padding: 10px; margin-top: 10px; font-size: 9.5pt; }
-  .hrd-line { border-bottom: 1px solid #000; display: inline-block; width: 200px; }
-</style>
-</head>
-<body>
+        // Group flat rows by kategori for renderPdfPage
+        $groupedByKat = [];
+        foreach ($grouped as $row) {
+            $groupedByKat[$row['kategori'] ?? 'Lainnya'][] = $row;
+        }
+
+        $catLabels = [
+            'A. Pengetahuan Akan Tugas (Knowledge)'  => 'A. Pengetahuan Akan Tugas (Knowledge)',
+            'B. Keahlian Kerja (Technical Skill)'    => 'B. Keahlian Kerja (Technical Skill)',
+            'C. Sikap Kerja (Attitude)'               => 'C. Sikap Kerja (Attitude)',
+            'D. Kemampuan Diri (Interpersonal Skill)' => 'D. Kemampuan Diri (Interpersonal Skill)',
+        ];
+
+        $h = fn($v) => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+
+        ob_start(); ?>
+<!DOCTYPE html><html><head><meta charset="UTF-8"><?= $this->pdfCss() ?></head><body>
+<?= $this->renderPdfPage($evaluation, $groupedByKat, $nomorSheet, $isSheet2, $tglPenilaian, $tglMasuk, $totalNilai, $rataRata, $catLabels) ?>
+</body></html>
 <?php
-$renderPage = function(int $num, bool $isSheet2) use (
-    $evaluation, $grouped, $totalNilai, $totalAspek, $rataRata, $lulus, $tanggalPenilaian, $tanggalMasuk
-) {
-    $tglMulai   = !empty($evaluation['tanggal_mulai_penilaian'])
-                  ? date('d/m/Y', strtotime($evaluation['tanggal_mulai_penilaian'])) : '-';
-    $tglSelesai = !empty($evaluation['tanggal_selesai_penilaian'])
-                  ? date('d/m/Y', strtotime($evaluation['tanggal_selesai_penilaian'])) : '-';
-    ?>
-<div class="page-title">FORM PENILAIAN PROBATION TEAM MEMBER</div>
-<div class="badge"><span>PENILAIAN KE-<?= $num ?></span></div>
+        return ob_get_clean();
+    }
+
+    /**
+     * Render combined PDF for all evaluations (both sheets).
+     */
+    protected function generatePdfAllHtml(array $eval1, ?array $eval2, array $grouped1, ?array $grouped2): string
+    {
+        $tglPenilaian1 = !empty($eval1['tanggal_penilaian'])
+            ? date('d/m/Y', strtotime($eval1['tanggal_penilaian'])) : '-';
+        $tglMasuk1 = !empty($eval1['mulai_probation'])
+            ? date('d/m/Y', strtotime($eval1['mulai_probation'])) : '-';
+
+        $total1 = 0; $count1 = 0;
+        foreach ($grouped1 as $row) { $total1 += (int)($row['nilai'] ?? 0); $count1++; }
+        $rata1 = $count1 > 0 ? number_format($total1 / $count1, 2) : '0.00';
+
+        $groupedByKat1 = [];
+        foreach ($grouped1 as $row) { $groupedByKat1[$row['kategori'] ?? 'Lainnya'][] = $row; }
+
+        $catLabels = [
+            'A. Pengetahuan Akan Tugas (Knowledge)'  => 'A. Pengetahuan Akan Tugas (Knowledge)',
+            'B. Keahlian Kerja (Technical Skill)'    => 'B. Keahlian Kerja (Technical Skill)',
+            'C. Sikap Kerja (Attitude)'               => 'C. Sikap Kerja (Attitude)',
+            'D. Kemampuan Diri (Interpersonal Skill)' => 'D. Kemampuan Diri (Interpersonal Skill)',
+        ];
+
+        ob_start(); ?>
+<!DOCTYPE html><html><head><meta charset="UTF-8"><?= $this->pdfCss() ?></head><body>
+<?= $this->renderPdfPage($eval1, $groupedByKat1, 1, false, $tglPenilaian1, $tglMasuk1, $total1, $rata1, $catLabels) ?>
+<?php
+        if ($eval2 && $grouped2) {
+            $tglPenilaian2 = !empty($eval2['tanggal_penilaian'])
+                ? date('d/m/Y', strtotime($eval2['tanggal_penilaian'])) : '-';
+            $tglMasuk2 = !empty($eval2['mulai_probation'])
+                ? date('d/m/Y', strtotime($eval2['mulai_probation'])) : '-';
+            $total2 = 0; $count2 = 0;
+            foreach ($grouped2 as $row) { $total2 += (int)($row['nilai'] ?? 0); $count2++; }
+            $rata2 = $count2 > 0 ? number_format($total2 / $count2, 2) : '0.00';
+            $groupedByKat2 = [];
+            foreach ($grouped2 as $row) { $groupedByKat2[$row['kategori'] ?? 'Lainnya'][] = $row; }
+            echo '<div class="page-break"></div>';
+            echo $this->renderPdfPage($eval2, $groupedByKat2, 2, true, $tglPenilaian2, $tglMasuk2, $total2, $rata2, $catLabels);
+        }
+?>
+</body></html>
+<?php
+        return ob_get_clean();
+    }
+
+    /**
+     * Render one page of the PDF form (used by both single and combined PDF).
+     */
+    private function renderPdfPage(
+        array $evaluation, array $grouped, int $nomorSheet, bool $isSheet2,
+        string $tglPenilaian, string $tglMasuk, int $totalNilai, string $rataRata,
+        array $catLabels
+    ): string {
+        $h      = fn($v) => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+        $halaman = $isSheet2 ? '02/03' : '01/03';
+        $title   = 'PENILAIAN ' . $nomorSheet . ' MASA PERCOBAAN TEAM MEMBER';
+        $dots    = '&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;';
+
+        ob_start(); ?>
+<!-- FORM HEADER -->
+<table class="fh">
+  <tr>
+    <td class="fh-logo" rowspan="2">SUMBER</td>
+    <td class="fh-form" rowspan="2">FORMULIR</td>
+    <td class="fh-key">No. Dokumen :</td>
+    <td class="fh-key">Halaman</td>
+    <td class="fh-val">: <?= $halaman ?></td>
+  </tr>
+  <tr>
+    <td class="fh-val">SMJ-F-RSC-HRD-027</td>
+    <td class="fh-key">No./Tgl Efektif :</td>
+    <td class="fh-val">05/05 Maret 2025</td>
+  </tr>
+  <tr>
+    <td colspan="5" class="fh-title"><?= $title ?></td>
+  </tr>
+</table>
+
+<!-- DATA KARYAWAN -->
+<p class="dk-title">DATA KARYAWAN</p>
 <table class="dk">
   <tr>
-    <td class="lbl">DIVISI / DEPT.</td><td><?= htmlspecialchars($evaluation['departemen'] ?? '-') ?></td>
-    <td class="lbl">JABATAN</td><td><?= htmlspecialchars($evaluation['posisi'] ?? '-') ?></td>
+    <td class="dk-lbl">DIVISI / DEPT.</td><td class="dk-sep">:</td>
+    <td class="dk-val"><?= $h($evaluation['departemen'] ?? '') ?></td>
+    <td class="dk-lbl">JABATAN</td><td class="dk-sep">:</td>
+    <td class="dk-val"><?= $h($evaluation['posisi'] ?? '') ?></td>
   </tr>
   <tr>
-    <td class="lbl">NIK</td><td><?= htmlspecialchars($evaluation['nik'] ?? '-') ?></td>
-    <td class="lbl">TANGGAL MASUK</td><td><?= $tanggalMasuk ?></td>
+    <td class="dk-lbl">NIK</td><td class="dk-sep">:</td>
+    <td class="dk-val"><?= $h($evaluation['nik'] ?? '') ?></td>
+    <td class="dk-lbl">TANGGAL MASUK</td><td class="dk-sep">:</td>
+    <td class="dk-val"><?= $tglMasuk ?></td>
   </tr>
   <tr>
-    <td class="lbl">NAMA</td><td><?= htmlspecialchars($evaluation['nama'] ?? '-') ?></td>
-    <td class="lbl">TANGGAL PENILAIAN</td><td><?= $tanggalPenilaian ?></td>
+    <td class="dk-lbl">NAMA</td><td class="dk-sep">:</td>
+    <td class="dk-val"><?= $h($evaluation['nama'] ?? '') ?></td>
+    <td class="dk-lbl">TANGGAL PENILAIAN</td><td class="dk-sep">:</td>
+    <td class="dk-val"><?= $tglPenilaian ?></td>
   </tr>
   <tr>
-    <td class="lbl">BAGIAN</td><td><?= htmlspecialchars($evaluation['departemen'] ?? '-') ?></td>
-    <td class="lbl">STATUS KARYAWAN</td><td>PERCOBAAN</td>
+    <td class="dk-lbl">BAGIAN</td><td class="dk-sep">:</td>
+    <td class="dk-val"><?= $h($evaluation['departemen'] ?? '') ?></td>
+    <td class="dk-lbl">STATUS KARYAWAN</td><td class="dk-sep">:</td>
+    <td class="dk-val">PERCOBAAN</td>
   </tr>
 </table>
-<p style="font-size:8.5pt;font-style:italic;margin:4px 0 8px;">* DIISI DENGAN NILAI YANG ADA PADA PANDUAN NORMA PENILAIAN (TABEL DIBAWAH)</p>
-<?php
-$catLabels = [
-    'A. Pengetahuan Akan Tugas (Knowledge)' => 'A. PENGETAHUAN AKAN TUGAS (KNOWLEDGE)',
-    'B. Keahlian Kerja (Technical Skill)'   => 'B. KEAHLIAN KERJA (TECHNICAL SKILL)',
-    'C. Sikap Kerja (Attitude)'              => 'C. SIKAP KERJA (ATTITUDE)',
-    'D. Kemampuan Diri (Interpersonal Skill)'=> 'D. KEMAMPUAN DIRI (INTERPERSONAL SKILL)',
-];
-foreach ($catLabels as $catKey => $catHeader):
-    $items = $grouped[$catKey] ?? [];
-    ?>
-<div class="sec"><?= $catHeader ?></div>
-<table class="sc">
-  <tr><th class="no">NO.</th><th>DEFINISI</th><th style="width:10%">NILAI</th></tr>
-  <?php foreach ($items as $i => $item): $sc = $item['nilai']; ?>
+<p class="note">* DIISI DENGAN NILAI YANG ADA PADA PANDUAN NORMA PENILAIAN (TABEL DIBAWAH)</p>
+
+<!-- TWO-COLUMN: score tables (left) + pedoman (right) -->
+<table class="tc">
   <tr>
-    <td class="no"><?= $i+1 ?></td>
-    <td><?= htmlspecialchars($item['aspek']) ?></td>
-    <td class="val <?= $sc >= 6 ? 'ok' : 'lo' ?>"><?= $sc ?></td>
-  </tr>
-  <?php endforeach; ?>
-</table>
+    <td style="width:72%;padding-right:2px;vertical-align:top;">
+<?php foreach ($catLabels as $catKey => $catHeader):
+    $items = $grouped[$catKey] ?? []; ?>
+      <p class="cat"><?= $h($catHeader) ?></p>
+      <table class="sc">
+        <tr>
+          <th class="sno">NO.</th>
+          <th style="text-align:left;padding-left:3px;">DEFINISI</th>
+          <th style="width:28px;">NILAI</th>
+        </tr>
+<?php foreach ($items as $i => $item): ?>
+        <tr>
+          <td class="sno"><?= $i + 1 ?></td>
+          <td><?= $h($item['aspek']) ?></td>
+          <td class="snl"><?= (int)$item['nilai'] ?></td>
+        </tr>
 <?php endforeach; ?>
-<table class="sc" style="margin-top:8px;">
-  <tr class="tot">
-    <td style="text-align:right">TOTAL</td>
-    <td class="val"><?= $totalNilai ?></td>
-  </tr>
-  <tr class="tot">
-    <td style="text-align:right">NILAI RATA-RATA = TOTAL NILAI : JUMLAH KRITERIA PENILAIAN</td>
-    <td class="val <?= $lulus ? 'ok' : 'lo' ?>"><?= $rataRata ?></td>
+      </table>
+<?php endforeach; ?>
+    </td>
+    <td style="width:28%;vertical-align:top;">
+      <div class="pd-box">
+        <p class="pd-ttl">PEDOMAN PEMBERIAN PENILAIAN</p>
+        <p class="pd-item">1. Pelajari dahulu <u>Panduan Aspek dan Kategori Penilaian Masa Percobaan Karyawan Baru</u> yang telah dibagikan.</p>
+        <p class="pd-item">2. Isi <i>form</i> sesuai data-data kinerja &amp; data-data pendukung lainya sesuai kondisi yang sesungguhnya.</p>
+        <p class="pd-item">3. Tulis dengan <u>jelas</u> angka nilai pada kolom nilai sesuai kategori penilaian yang tercantum di form ini.</p>
+        <p class="pd-item">4. Hubungi HRD Dept. jika Anda mengalami kesulitan dalam mengisi formulir ini</p>
+      </div>
+    </td>
   </tr>
 </table>
-<p style="font-size:8.5pt;font-style:italic;">*) Standar Kelulusan : Nilai Rata-Rata ≥ 6</p>
-<table class="norma">
-  <tr><th colspan="2">PANDUAN NORMA PENILAIAN</th></tr>
-  <tr><td>Performance selalu melebihi harapan dan persyaratan kerja</td><td style="text-align:center;font-weight:bold;width:15%">9 - 10</td></tr>
-  <tr><td>Performance memenuhi harapan dan persyaratan kerja</td><td style="text-align:center;font-weight:bold;">7 - 8</td></tr>
-  <tr><td>Performance sebagian besar memenuhi harapan dan persyaratan kerja</td><td style="text-align:center;font-weight:bold;">6</td></tr>
-  <tr><td>Performance hampir sebagian besar tidak memenuhi harapan dan persyaratan kerja</td><td style="text-align:center;font-weight:bold;">3 - 5</td></tr>
-  <tr><td>Performance tidak memenuhi harapan dan persyaratan kerja</td><td style="text-align:center;font-weight:bold;">0 - 2</td></tr>
+
+<!-- TOTAL -->
+<table class="tot">
+  <tr>
+    <td class="tlb">TOTAL</td>
+    <td class="tva"><?= $totalNilai ?></td>
+  </tr>
+  <tr>
+    <td class="tlb">NILAI RATA-RATA = TOTAL NILAI : JUMLAH KRITERIA PENILAIAN</td>
+    <td class="tva"><?= $rataRata ?></td>
+  </tr>
 </table>
+<p class="note">*) Standar Kelulusan : Nilai Rata-Rata &ge; 6</p>
+
+<!-- PANDUAN NORMA PENILAIAN -->
+<table class="nm">
+  <tr><td colspan="2" class="nhd">PANDUAN NORMA PENILAIAN</td></tr>
+  <tr>
+    <td class="nhd2" style="text-align:left;">KETERANGAN</td>
+    <td class="nhd2 nva">NILAI</td>
+  </tr>
+  <tr>
+    <td><i>Performance</i> <b>selalu melebihi</b> harapan dan persyaratan kerja</td>
+    <td class="nva">9 - 10</td>
+  </tr>
+  <tr>
+    <td><i>Performance</i> <b>memenuhi</b> harapan dan persyaratan kerja</td>
+    <td class="nva">7 - 8</td>
+  </tr>
+  <tr>
+    <td><i>Performance</i> <b>sebagian besar</b> memenuhi harapan dan persyaratan kerja</td>
+    <td class="nva">6</td>
+  </tr>
+  <tr>
+    <td><i>Performance</i> <b>hampir sebagian besar</b> tidak memenuhi harapan dan persyaratan kerja</td>
+    <td class="nva">3 - 5</td>
+  </tr>
+  <tr>
+    <td><i>Performance</i> <b>tidak memenuhi</b> harapan dan persyaratan kerja</td>
+    <td class="nva">0 - 2</td>
+  </tr>
+</table>
+
 <?php if ($isSheet2): ?>
 <div class="hrd-box">
   <strong>(Diisi oleh Dept. HRD)</strong><br>
-  Memperhatikan penilaian tersebut di atas, maka karyawan tersebut dipertimbangkan dan atau diputuskan untuk :<br><br>
-  Diangkat sebagai karyawan tetap per tanggal &nbsp;: <span class="hrd-line"></span><br><br>
-  Diakhiri masa kerjanya per tanggal &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: <span class="hrd-line"></span><br><br>
-  Lain-lain &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: <span class="hrd-line"></span>
+  Memperhatikan penilaian tersebut di atas, maka karyawan tersebut dipertimbangkan dan atau diputuskan untuk :<br>
+  Diangkat sebagai karyawan tetap per tanggal &nbsp;: <span class="hrd-line"></span><br>
+  Diakhiri masa kerjanya per tanggal &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: <span class="hrd-line"></span><br>
+  Lain-lain &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: <span class="hrd-line"></span>
 </div>
 <?php endif; ?>
-<table class="ttd">
+
+<!-- SIGNATURES -->
+<table class="sg">
   <tr>
-    <td><div style="font-weight:bold;">PENILAI / ATASAN LANGSUNG</div><div class="ttd-line"></div><div>Date : (………………………………….……………)</div></td>
-    <td><div style="font-weight:bold;">MENGETAHUI / MENYETUJUI</div><div class="ttd-line"></div><div>Date : (………………………………….……………)</div></td>
-    <td><div style="font-weight:bold;">YANG DINILAI</div><div class="ttd-line"></div><div>Date : (………………………………….……………)</div></td>
+    <td><strong>PENILAI / ATASAN LANGSUNG</strong></td>
+    <td><strong>MENGETAHUI / MENYETUJUI</strong></td>
+    <td><strong>YANG DINILAI</strong></td>
+  </tr>
+  <tr>
+    <td>
+      Date :<br><br><br><br><br>
+      (<?= $dots ?>)
+    </td>
+    <td>
+      Date :<br><br><br><br><br>
+      (<?= $dots ?>)
+    </td>
+    <td>
+      Date :<br><br><br><br><br>
+      (<?= $dots ?>)
+    </td>
   </tr>
 </table>
-<?php
-};
-
-$renderPage($nomorPenilaian, $nomorPenilaian >= 2);
-if ($nomorPenilaian == 1) {
-    echo '<div class="pb"></div>';
-    $renderPage(2, true);
-}
-?>
-</body>
-</html>
 <?php
         return ob_get_clean();
     }
