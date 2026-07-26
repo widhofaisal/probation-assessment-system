@@ -70,6 +70,13 @@ class ReportsController extends BaseController
             return redirect()->back()->with('error', 'Akses ditolak');
         }
 
+        if ($role === 'probationary-employee') {
+            $self = $this->employeeModel->findByNik(session()->get('nik'));
+            if (!$self || (int)$evaluation['employee_id'] !== (int)$self['id']) {
+                return redirect()->back()->with('error', 'Akses ditolak');
+            }
+        }
+
         return $this->pdfAll((int)$evaluation['employee_id']);
     }
 
@@ -257,7 +264,7 @@ class ReportsController extends BaseController
     public function pdfAll(int $employeeId)
     {
         $role = session()->get('role');
-        if (!in_array($role, ['hrd', 'team-leader'])) {
+        if (!in_array($role, ['hrd', 'team-leader', 'probationary-employee'])) {
             return redirect()->to('/auth/login');
         }
 
@@ -268,6 +275,13 @@ class ReportsController extends BaseController
 
         if ($role === 'team-leader' && (int)$employee['team_leader_id'] !== (int)session()->get('user_id')) {
             return redirect()->back()->with('error', 'Akses ditolak');
+        }
+
+        if ($role === 'probationary-employee') {
+            $self = $this->employeeModel->findByNik(session()->get('nik'));
+            if (!$self || (int)$self['id'] !== $employeeId) {
+                return redirect()->back()->with('error', 'Akses ditolak');
+            }
         }
 
         $raw1 = $this->evaluationModel->where('employee_id', $employeeId)->where('nomor_penilaian', 1)->first();
