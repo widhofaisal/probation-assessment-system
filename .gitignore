@@ -65,6 +65,15 @@ Vagrantfile
 /writable/debugbar/*
 !/writable/debugbar/index.html
 
+# Generated PDFs are a cache, not source. Committing them shipped locally
+# Word-rendered files into the repo, where they masked the fact that the
+# server renders with DomPDF instead.
+/writable/pdfs/*
+!/writable/pdfs/index.html
+
+/writable/tmp/*
+!/writable/tmp/index.html
+
 php_errors.log
 
 #-------------------------

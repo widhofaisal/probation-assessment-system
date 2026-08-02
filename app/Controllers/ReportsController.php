@@ -2,6 +2,8 @@
 
 namespace App\Controllers;
 
+use App\Libraries\KopSurat;
+use App\Libraries\PdfCache;
 use App\Models\EvaluationModel;
 use App\Models\EvaluationDetailModel;
 use App\Models\EmployeeModel;
@@ -54,8 +56,8 @@ class ReportsController extends BaseController
     }
 
     /**
-     * Generate PDF — always produces the full 2-page employee form (ke-1 + ke-2).
-     * Delegates to pdfAll() so the download is always the complete probation document.
+     * Generate PDF for ONE evaluation only — sheet ke-1 or ke-2, never both.
+     * Use pdfAll() when the complete probation document is wanted.
      */
     public function generatePdf(int $id)
     {
@@ -77,7 +79,68 @@ class ReportsController extends BaseController
             }
         }
 
-        return $this->pdfAll((int)$evaluation['employee_id']);
+        $nomor    = (int)($evaluation['nomor_penilaian'] ?? 1);
+        $filename = 'Penilaian_' . ($evaluation['nik'] ?? $evaluation['employee_id']) . '_ke-' . $nomor . '.pdf';
+        $key      = PdfCache::keyForEvaluation($id);
+
+        // An authoritative (Word-rendered) copy always wins, even on Windows —
+        // regenerating it would only reproduce the same file.
+        $wordPath = PdfCache::path($key, PdfCache::ENGINE_WORD);
+        if (is_file($wordPath)) {
+            return $this->servePdf($wordPath, $filename);
+        }
+
+        // --- Primary: Word COM via PowerShell (Windows only) ---
+        // buildWordComScript() fills only this sheet's tables and exports only its page.
+        if ($this->isWindows()) {
+            $evaluation['details'] = $this->evaluationDetailModel->where('penilaian_id', $id)->findAll();
+
+            $pdfPath = $this->generatePdfViaWordCom($evaluation);
+            if ($pdfPath && file_exists($pdfPath)) {
+                $cached = PdfCache::adopt($key, PdfCache::ENGINE_WORD, $pdfPath);
+
+                return $this->servePdf($cached, $filename);
+            }
+        }
+
+        // --- Fallback: DomPDF (single sheet) ---
+        $fallbackPath = PdfCache::path($key, PdfCache::ENGINE_FALLBACK);
+        if (is_file($fallbackPath)) {
+            return $this->servePdf($fallbackPath, $filename);
+        }
+
+        $grouped = $this->evaluationDetailModel->getByEvaluationGrouped($id);
+        $html    = $this->generatePdfHtmlSheet($evaluation, $grouped, $nomor);
+
+        $cached = PdfCache::put($key, PdfCache::ENGINE_FALLBACK, $this->renderDompdf($html));
+
+        return $this->servePdf($cached, $filename);
+    }
+
+    /**
+     * Rasterize form HTML with DomPDF. Remote assets stay disabled — every image
+     * the form needs is inlined as a data URI (see KopSurat).
+     */
+    private function renderDompdf(string $html): string
+    {
+        $opts = new \Dompdf\Options();
+        $opts->set('isHtml5ParserEnabled', true);
+        $opts->set('isRemoteEnabled', false);
+
+        $dompdf = new \Dompdf\Dompdf($opts);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+
+        return $dompdf->output();
+    }
+
+    private function servePdf(string $path, string $filename)
+    {
+        return $this->response
+            ->setHeader('Content-Type', 'application/pdf')
+            ->setHeader('Content-Disposition', 'inline; filename="' . $filename . '"')
+            ->setBody(file_get_contents($path));
     }
 
     // ---------------------------------------------------------------
@@ -195,6 +258,7 @@ class ReportsController extends BaseController
         $L[] = '            $r2.Font.Bold = $false';
         $L[] = '        } catch {}';
         $L[] = '    }';
+        $L = array_merge($L, $this->pinVerifikasiPageLines());
         $L[] = '';
         $L[] = "    \$off = {$off}";
         $L[] = '';
@@ -237,6 +301,7 @@ class ReportsController extends BaseController
         $L[] = '    $t6 = $doc.Tables.Item(6 + $off)';
         $L[] = "    SetScoreCell \$t6 1 2 '{$totalScore}'";
         $L[] = "    SetScoreCell \$t6 2 2 '{$avgScore}'";
+        $L = array_merge($L, $this->buildVerifikasiLines($eval, '$off', $ps));
         $L[] = '';
         // Export only the relevant page (ke-1 → page 1, ke-2 → page 2)
         $L[] = "    \$doc.ExportAsFixedFormat('{$pdf}', 17, \$false, 0, 3, {$nomor}, {$nomor})";
@@ -299,53 +364,39 @@ class ReportsController extends BaseController
             $eval2['details'] = $this->evaluationDetailModel->where('penilaian_id', $raw2['id'])->findAll();
         }
 
-        $filename   = 'Penilaian_' . ($employee['nik'] ?? $employeeId) . '_semua.pdf';
-        $pdfDir     = rtrim(WRITEPATH, '/\\') . DIRECTORY_SEPARATOR . 'pdfs';
-        $cachedPath = $pdfDir . DIRECTORY_SEPARATOR . 'eval_all_' . $employeeId . '.pdf';
+        $filename = 'Penilaian_' . ($employee['nik'] ?? $employeeId) . '_semua.pdf';
+        $key      = PdfCache::keyForEmployee($employeeId);
 
-        // Serve from cache if available
-        if (file_exists($cachedPath)) {
-            return $this->response
-                ->setHeader('Content-Type', 'application/pdf')
-                ->setHeader('Content-Disposition', 'inline; filename="' . $filename . '"')
-                ->setBody(file_get_contents($cachedPath));
+        // An authoritative (Word-rendered) copy always wins — this is the file
+        // deploy-scripts/_generate-upload-pdf.js uploads for the Linux host.
+        $wordPath = PdfCache::path($key, PdfCache::ENGINE_WORD);
+        if (is_file($wordPath)) {
+            return $this->servePdf($wordPath, $filename);
         }
 
         // --- Primary: Word COM via PowerShell (Windows only) ---
         if ($this->isWindows()) {
             $pdfPath = $this->generatePdfAllViaWordCom($eval1, $eval2);
             if ($pdfPath && file_exists($pdfPath)) {
-                if (!is_dir($pdfDir)) mkdir($pdfDir, 0755, true);
-                rename($pdfPath, $cachedPath);
+                $cached = PdfCache::adopt($key, PdfCache::ENGINE_WORD, $pdfPath);
 
-                return $this->response
-                    ->setHeader('Content-Type', 'application/pdf')
-                    ->setHeader('Content-Disposition', 'inline; filename="' . $filename . '"')
-                    ->setBody(file_get_contents($cachedPath));
+                return $this->servePdf($cached, $filename);
             }
         }
 
         // --- Fallback: DomPDF ---
+        $fallbackPath = PdfCache::path($key, PdfCache::ENGINE_FALLBACK);
+        if (is_file($fallbackPath)) {
+            return $this->servePdf($fallbackPath, $filename);
+        }
+
         $grouped1 = $this->evaluationDetailModel->getByEvaluationGrouped($raw1['id']);
         $grouped2 = $raw2 ? $this->evaluationDetailModel->getByEvaluationGrouped($raw2['id']) : null;
         $html     = $this->generatePdfAllHtml($eval1, $eval2, $grouped1, $grouped2);
 
-        $opts = new \Dompdf\Options();
-        $opts->set('isHtml5ParserEnabled', true);
-        $opts->set('isRemoteEnabled', false);
-        $dompdf = new \Dompdf\Dompdf($opts);
-        $dompdf->loadHtml($html);
-        $dompdf->setPaper('A4', 'portrait');
-        $dompdf->render();
-        $pdfContent = $dompdf->output();
+        $cached = PdfCache::put($key, PdfCache::ENGINE_FALLBACK, $this->renderDompdf($html));
 
-        if (!is_dir($pdfDir)) mkdir($pdfDir, 0755, true);
-        file_put_contents($cachedPath, $pdfContent);
-
-        return $this->response
-            ->setHeader('Content-Type', 'application/pdf')
-            ->setHeader('Content-Disposition', 'inline; filename="' . $filename . '"')
-            ->setBody($pdfContent);
+        return $this->servePdf($cached, $filename);
     }
 
     private function generatePdfAllViaWordCom(array $eval1, ?array $eval2): ?string
@@ -410,6 +461,8 @@ class ReportsController extends BaseController
         $L[] = '            $r2.Font.Bold = $false';
         $L[] = '        } catch {}';
         $L[] = '    }';
+
+        $L = array_merge($L, $this->pinVerifikasiPageLines());
 
         foreach ([[$eval1, 0], [$eval2, 8]] as [$eval, $off]) {
             if (!$eval) continue;
@@ -493,8 +546,119 @@ class ReportsController extends BaseController
         $L[] = "    \$t6 = \$doc.Tables.Item(6 + {$off})";
         $L[] = "    SetScoreCell \$t6 1 2 '{$totalScore}'";
         $L[] = "    SetScoreCell \$t6 2 2 '{$avgScore}'";
+        $L = array_merge($L, $this->buildVerifikasiLines($eval, (string)$off, $ps));
 
         return $L;
+    }
+
+    /**
+     * PowerShell lines that stamp the verification footnote onto one sheet.
+     *
+     * The template already carries an empty paragraph directly under the
+     * signature table (table 8 of each sheet), so the text is written into
+     * that paragraph rather than inserted as a new one — adding a line would
+     * reflow the document and break the per-page export ranges.
+     *
+     * The note is set to 8pt so even a long name stays on a single line; the
+     * 468pt text column fits roughly 130 characters at that size. That is a
+     * point smaller than the 9pt paragraph it lands in, which shortens page 1
+     * just enough for sheet 2 to creep up onto it — pinVerifikasiPageLines()
+     * holds sheet 2 down and must be emitted alongside this.
+     *
+     * $off is emitted verbatim into the script: buildWordComScript() passes the
+     * PowerShell variable '$off', buildSheetLines() passes a literal offset.
+     */
+    private function buildVerifikasiLines(array $eval, string $off, callable $ps): array
+    {
+        $note = $ps($this->verifikasiNote($eval));
+
+        return [
+            '',
+            '    # CATATAN VERIFIKASI (paragraf kosong di bawah tabel tanda tangan)',
+            '    try {',
+            "        \$sig  = \$doc.Tables.Item(8 + {$off})",
+            '        $vrf  = $doc.Range($sig.Range.End, $sig.Range.End)',
+            "        \$vrf.InsertAfter('{$note}')",
+            '        $vrf.Font.Size = 8',
+            '        $vrf.Font.Bold = $false',
+            '        $vrf.Font.Italic = $true',
+            '        $vrf.ParagraphFormat.Alignment = 0',
+            '    } catch {}',
+        ];
+    }
+
+    /**
+     * Keep sheet 2 starting on its own page.
+     *
+     * In the untouched template the split between the two sheets is a soft
+     * break — page 1 simply happens to be full. Writing the footnote into
+     * page 1's trailing paragraph frees a fraction of a line, which is enough
+     * for sheet 2's first table row to flow up and print at the bottom of
+     * page 1, and the per-sheet exports then straddle the wrong pages.
+     * Making the break explicit removes that dependence on exact line heights.
+     */
+    private function pinVerifikasiPageLines(): array
+    {
+        return [
+            '',
+            '    # Sheet ke-2 (tabel 9) selalu mulai di halaman baru',
+            '    try {',
+            '        $doc.Tables.Item(9).Rows.Item(1).Range.ParagraphFormat.PageBreakBefore = $true',
+            '    } catch {}',
+        ];
+    }
+
+    // ---------------------------------------------------------------
+    // CATATAN VERIFIKASI
+    // ---------------------------------------------------------------
+
+    /**
+     * Footnote printed at the bottom of every evaluation sheet, below the
+     * signature block. Both renderers (Word COM and DomPDF) call this so the
+     * two stay word for word identical.
+     *
+     * The date is the sheet's own tanggal_penilaian — the same date already
+     * printed in DATA KARYAWAN — so each period carries its own date.
+     */
+    private function verifikasiNote(array $evaluation): string
+    {
+        $nama = trim((string)($evaluation['nama'] ?? ''));
+        $tgl  = $this->tanggalIndo($evaluation['tanggal_penilaian'] ?? null);
+
+        $note = '* Telah diverifikasi oleh Penilai dan Yang Dinilai'
+              . ($nama !== '' ? ' (' . $nama . ')' : '');
+
+        return $tgl !== '' ? $note . ' pada hari ' . $tgl : $note;
+    }
+
+    /**
+     * '2026-06-23' → 'Selasa, 23 Juni 2026'.
+     *
+     * date('l F') follows the server locale, which on the shared host is not
+     * Indonesian, so the names are mapped here instead. Returns '' when the
+     * date is missing or unparsable — callers drop the clause entirely.
+     */
+    private function tanggalIndo(?string $date): string
+    {
+        if (empty($date)) {
+            return '';
+        }
+
+        $ts = strtotime($date);
+        if ($ts === false) {
+            return '';
+        }
+
+        $hari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        $bulan = [
+            1 => 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+            'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+        ];
+
+        return $hari[(int)date('w', $ts)] . ', '
+             . (int)date('j', $ts) . ' '
+             . $bulan[(int)date('n', $ts)] . ' '
+             . date('Y', $ts);
     }
 
     // ---------------------------------------------------------------
@@ -508,15 +672,25 @@ class ReportsController extends BaseController
 * { box-sizing:border-box; }
 body { font-family:Arial,Helvetica,sans-serif; font-size:8pt; color:#000; margin:0; padding:0; }
 
-/* FORM HEADER */
-table.fh { width:100%; border-collapse:collapse; margin-bottom:4px; }
-table.fh td { border:1px solid #000; padding:2px 5px; vertical-align:middle; font-size:7.5pt; }
-.fh-logo { background:#D94F00; color:#fff; font-size:12pt; font-weight:bold; font-style:italic;
-           text-align:center; width:55px; letter-spacing:1pt; }
-.fh-form { text-align:center; font-weight:bold; font-size:8.5pt; width:52px; }
-.fh-key  { font-weight:bold; font-size:7pt; white-space:nowrap; }
-.fh-val  { font-size:7pt; }
-.fh-title { text-align:center; font-weight:bold; font-size:9pt; background:#ddd; padding:3px 0; }
+/* FORM HEADER (kop surat) — mirrors the Word template cell for cell so the
+   DomPDF fallback and the Word COM render are visually interchangeable.
+   The template sets this block in Times New Roman while the rest of the form
+   is Arial; keep that split or the letterhead reads as a different document. */
+table.fh { width:100%; border-collapse:collapse; margin-bottom:4px;
+           font-family:"Times New Roman",Times,serif; }
+table.fh td { border:1px solid #000; padding:2px 5px; vertical-align:middle; }
+.fh-logo  { width:16.5%; text-align:center; padding:3px 4px; }
+.fh-logo img { width:92px; height:33px; }
+.fh-form  { width:20.5%; text-align:center; font-weight:bold; font-size:9.5pt; }
+.fh-doc   { width:19%; text-align:center; font-weight:bold; font-size:8.5pt; line-height:1.4; }
+.fh-key   { width:22%; font-size:8.5pt; }
+.fh-val   { width:22%; font-size:8.5pt; }
+.fh-title { font-weight:bold; font-size:9.5pt; padding:2px 6px; }
+
+/* Helvetica, which DomPDF substitutes for Arial, has no glyph for characters
+   outside WinAnsi, so >= prints as a question mark. Borrow the bundled DejaVu
+   face for those few characters only. */
+.uni { font-family:"DejaVu Sans",sans-serif; }
 
 /* DATA KARYAWAN */
 .dk-title { text-align:center; font-weight:bold; font-size:8.5pt; margin:5px 0 3px; }
@@ -563,6 +737,9 @@ table.nm td { border:1px solid #000; padding:2px 4px; font-size:7.5pt; }
 /* SIGNATURES */
 table.sg { width:100%; border-collapse:collapse; margin-top:8px; }
 table.sg td { text-align:center; font-size:7.5pt; width:33%; padding:0 3px; vertical-align:top; border:none; }
+
+/* CATATAN VERIFIKASI — closes each sheet, under the signature block */
+p.vrf { font-size:7.5pt; font-style:italic; margin:6px 0 0; }
 
 /* PEDOMAN */
 .pd-box  { border:1px solid #000; padding:5px 6px; margin-left:3px; }
@@ -674,27 +851,29 @@ table.sg td { text-align:center; font-size:7.5pt; width:33%; padding:0 3px; vert
         array $catLabels
     ): string {
         $h      = fn($v) => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
-        $halaman = $isSheet2 ? '02/03' : '01/03';
+        // The Word template prints "01/03" on both sheets — it is static text in
+        // the .doc, not a field. Matching it keeps the two renderers in step;
+        // change it here and in the .doc together if real numbering is wanted.
+        $halaman = '01/03';
         $title   = 'PENILAIAN ' . $nomorSheet . ' MASA PERCOBAAN TEAM MEMBER';
         $dots    = '&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;';
 
         ob_start(); ?>
-<!-- FORM HEADER -->
+<!-- FORM HEADER — cell structure matches the Word template exactly -->
 <table class="fh">
   <tr>
-    <td class="fh-logo" rowspan="2">SUMBER</td>
+    <td class="fh-logo" rowspan="3"><img src="<?= KopSurat::logoDataUri() ?>" alt="SUMBER"></td>
     <td class="fh-form" rowspan="2">FORMULIR</td>
-    <td class="fh-key">No. Dokumen :</td>
+    <td class="fh-doc" rowspan="2">No. Dokumen :<br>SMJ-F-RSC-HRD-027</td>
     <td class="fh-key">Halaman</td>
     <td class="fh-val">: <?= $halaman ?></td>
   </tr>
   <tr>
-    <td class="fh-val">SMJ-F-RSC-HRD-027</td>
-    <td class="fh-key">No./Tgl Efektif :</td>
-    <td class="fh-val">05/05 Maret 2025</td>
+    <td class="fh-key">No./Tgl Efektif</td>
+    <td class="fh-val">: 05/05 Maret 2025</td>
   </tr>
   <tr>
-    <td colspan="5" class="fh-title"><?= $title ?></td>
+    <td colspan="4" class="fh-title"><?= $title ?></td>
   </tr>
 </table>
 
@@ -774,7 +953,7 @@ table.sg td { text-align:center; font-size:7.5pt; width:33%; padding:0 3px; vert
     <td class="tva"><?= $rataRata ?></td>
   </tr>
 </table>
-<p class="note">*) Standar Kelulusan : Nilai Rata-Rata &ge; 6</p>
+<p class="note">*) Standar Kelulusan : Nilai Rata-Rata <span class="uni">&ge;</span> 6</p>
 
 <!-- PANDUAN NORMA PENILAIAN -->
 <table class="nm">
@@ -837,6 +1016,9 @@ table.sg td { text-align:center; font-size:7.5pt; width:33%; padding:0 3px; vert
     </td>
   </tr>
 </table>
+
+<!-- CATATAN VERIFIKASI -->
+<p class="vrf"><?= $h($this->verifikasiNote($evaluation)) ?></p>
 <?php
         return ob_get_clean();
     }

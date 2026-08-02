@@ -7,7 +7,9 @@
     <title><?= $title ? htmlspecialchars($title) . ' | ' : '' ?>Sistem Penilaian Probation</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config = { darkMode: 'class' };</script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <?= $this->include('partials/theme') ?>
     <style>
         body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
         .sidebar-active { background-color: rgba(0,102,204,0.1); border-left: 3px solid #0066cc; }
@@ -21,7 +23,7 @@
         .modal-enter { animation: modalIn 0.2s ease-out forwards; }
     </style>
 </head>
-<body class="bg-gray-50">
+<body class="app-body bg-gray-50">
 
 <!-- ===== TOAST CONTAINER ===== -->
 <div id="toastContainer" class="fixed top-4 right-4 z-[9999] flex flex-col gap-2.5 pointer-events-none" style="width:360px;max-width:calc(100vw - 2rem)"></div>
@@ -127,6 +129,13 @@
                 <h2 class="text-xl font-bold text-gray-900"><?= htmlspecialchars($title ?? 'Dashboard') ?></h2>
             </div>
             <div class="flex items-center gap-3">
+                <!-- Dark Mode Toggle -->
+                <button type="button" onclick="toggleTheme()" data-theme-toggle
+                        title="Ganti ke Mode Gelap" aria-label="Ganti ke Mode Gelap" aria-pressed="false"
+                        class="w-9 h-9 rounded-xl hover:bg-gray-100 text-gray-500 flex items-center justify-center transition cursor-pointer">
+                    <i class="fas fa-moon" data-theme-icon></i>
+                </button>
+
                 <!-- Profile Dropdown -->
                 <?php
                 $roleLabels = [
@@ -160,6 +169,11 @@
                             <a href="/profile/change-password" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-100 transition">
                                 <i class="fas fa-lock text-yellow-500 w-4"></i> Ganti Password
                             </a>
+                            <button type="button" onclick="toggleTheme()" data-theme-toggle
+                                    class="w-full text-left flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-100 transition cursor-pointer">
+                                <i class="fas fa-moon text-indigo-400 w-4" data-theme-icon></i>
+                                <span data-theme-label>Mode Gelap</span>
+                            </button>
                         </div>
                         <div class="border-t py-1">
                             <a href="/auth/logout" class="flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition">

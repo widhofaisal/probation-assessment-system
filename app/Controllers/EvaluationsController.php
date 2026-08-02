@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use App\Libraries\PdfCache;
 use App\Models\EvaluationModel;
 use App\Models\EvaluationDetailModel;
 use App\Models\EmployeeModel;
@@ -113,6 +114,9 @@ class EvaluationsController extends BaseController
             if (is_array($details) && !empty($details)) {
                 $this->evaluationDetailModel->insertDetails($evaluationId, $details);
             }
+
+            // Invalidate the employee's combined PDF — it must now include this new sheet
+            PdfCache::forget(PdfCache::keyForEmployee((int)$employeeId));
 
             // Log audit
             $this->logAudit('CREATE', 'penilaian', $evaluationId, null, $evaluationData);
@@ -230,9 +234,8 @@ class EvaluationsController extends BaseController
             }
 
             // Invalidate PDF cache for this eval and the employee's combined PDF
-            $pdfDir = rtrim(WRITEPATH, '/\\') . DIRECTORY_SEPARATOR . 'pdfs';
-            @unlink($pdfDir . DIRECTORY_SEPARATOR . 'eval_' . $id . '.pdf');
-            @unlink($pdfDir . DIRECTORY_SEPARATOR . 'eval_all_' . $evaluation['employee_id'] . '.pdf');
+            PdfCache::forget(PdfCache::keyForEvaluation($id));
+            PdfCache::forget(PdfCache::keyForEmployee((int)$evaluation['employee_id']));
 
             // Log audit
             $this->logAudit('UPDATE', 'penilaian', $id, (array)$evaluation, $updateData);
@@ -264,9 +267,8 @@ class EvaluationsController extends BaseController
         $this->evaluationModel->delete($id);
 
         // Invalidate PDF cache
-        $pdfDir = rtrim(WRITEPATH, '/\\') . DIRECTORY_SEPARATOR . 'pdfs';
-        @unlink($pdfDir . DIRECTORY_SEPARATOR . 'eval_' . $id . '.pdf');
-        @unlink($pdfDir . DIRECTORY_SEPARATOR . 'eval_all_' . $evaluation['employee_id'] . '.pdf');
+        PdfCache::forget(PdfCache::keyForEvaluation($id));
+        PdfCache::forget(PdfCache::keyForEmployee((int)$evaluation['employee_id']));
 
         $this->logAudit('DELETE', 'penilaian', $id, (array)$evaluation, null);
 
