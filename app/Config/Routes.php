@@ -71,9 +71,11 @@ $routes->group('evaluations', static function ($routes) {
     $routes->post('store', 'EvaluationsController::store');
     $routes->get('(:num)', 'EvaluationsController::show/$1');
     $routes->get('(:num)/edit', 'EvaluationsController::edit/$1');
+    $routes->post('(:num)/keputusan', 'EvaluationsController::storeKeputusan/$1');
     $routes->post('(:num)', 'EvaluationsController::update/$1');
     $routes->delete('(:num)', 'EvaluationsController::destroy/$1');
     $routes->get('aspects', 'EvaluationsController::getAspects');
+    $routes->get('keputusan-status', 'EvaluationsController::keputusanStatus');
 });
 
 // ===== REPORTS ROUTES =====

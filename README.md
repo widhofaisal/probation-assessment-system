@@ -144,6 +144,7 @@ htdocs/
 - Dashboard statistik karyawan & penilaian
 - Manajemen karyawan probation (tambah, edit, hapus)
 - Lihat semua penilaian dari semua Team Leader
+- Mengisi Keputusan HRD setelah penilaian ke-2 selesai — inilah yang menentukan status akhir karyawan
 - Manajemen user (tambah/edit/hapus HRD & Team Leader)
 - Export data CSV
 - Audit trail (log semua aktivitas)
@@ -167,7 +168,7 @@ htdocs/
 HRD
 ├── Menambah karyawan probation → akun login otomatis terbuat
 ├── Melihat semua penilaian
-├── Mengubah status karyawan (pending → lulus / tidak-lulus / warning)
+├── Mengisi Keputusan HRD pada penilaian ke-2 → status karyawan ikut berubah
 └── Mengelola user (HRD & Team Leader)
 
 Team Leader
@@ -178,11 +179,31 @@ Karyawan Probation
 └── Melihat hasil penilaian sendiri
 ```
 
+### Alur Akhir Masa Probasi
+
+```
+Team Leader menilai (ke-1)
+        ↓
+Team Leader menilai (ke-2)          → status karyawan masih `pending`
+        ↓
+HRD mengisi Keputusan HRD           → kotak "(Diisi oleh Dept. HRD)" pada form
+   di /evaluations                     · Diangkat sebagai karyawan tetap per tanggal
+                                       · Diakhiri masa kerjanya per tanggal
+                                       · Lain-lain
+                                       · Status akhir (lulus / tidak-lulus / warning)
+        ↓
+Status karyawan berubah + isian tercetak di PDF penilaian ke-2
+```
+
+> Status probation **hanya** bisa diubah lewat Keputusan HRD. Dropdown status di
+> form data karyawan sengaja dikunci agar karyawan tidak bisa dinyatakan lulus /
+> tidak lulus sebelum kotak HRD diisi.
+
 ### Status Karyawan
 
 | Status | Keterangan |
 |--------|-----------|
-| `pending` | Masih dalam masa probasi, belum ada keputusan |
+| `pending` | Masih dalam masa probasi, belum ada keputusan HRD |
 | `lulus` | Dinyatakan lulus, lanjut jadi karyawan tetap |
 | `tidak-lulus` | Tidak dilanjutkan |
 | `warning` | Diberi kesempatan/peringatan, perlu evaluasi lanjut |
@@ -192,11 +213,12 @@ Karyawan Probation
 ## Struktur Database
 
 ```
-users           → Akun login (HRD, Team Leader, Probationary Employee)
-employees       → Data karyawan masa probasi
-penilaian       → Rekap penilaian per karyawan
-penilaian_detail → Nilai per aspek penilaian
-audit_logs      → Log semua aktivitas sistem
+users               → Akun login (HRD, Team Leader, Probationary Employee)
+employees           → Data karyawan masa probasi
+penilaian           → Rekap penilaian per karyawan
+penilaian_detail    → Nilai per aspek penilaian
+penilaian_keputusan → Keputusan HRD atas penilaian ke-2 (kotak "Diisi oleh Dept. HRD")
+audit_logs          → Log semua aktivitas sistem
 ```
 
 ### Aspek Penilaian (10 aspek, nilai 1–10)

@@ -5,6 +5,7 @@ namespace App\Controllers;
 use App\Libraries\KopSurat;
 use App\Libraries\PdfCache;
 use App\Models\EvaluationModel;
+use App\Models\EvaluationDecisionModel;
 use App\Models\EvaluationDetailModel;
 use App\Models\EmployeeModel;
 
@@ -12,12 +13,14 @@ class ReportsController extends BaseController
 {
     protected $evaluationModel;
     protected $evaluationDetailModel;
+    protected $evaluationDecisionModel;
     protected $employeeModel;
 
     public function __construct()
     {
         $this->evaluationModel      = new EvaluationModel();
         $this->evaluationDetailModel = new EvaluationDetailModel();
+        $this->evaluationDecisionModel = new EvaluationDecisionModel();
         $this->employeeModel        = new EmployeeModel();
     }
 
@@ -83,6 +86,10 @@ class ReportsController extends BaseController
         $filename = 'Penilaian_' . ($evaluation['nik'] ?? $evaluation['employee_id']) . '_ke-' . $nomor . '.pdf';
         $key      = PdfCache::keyForEvaluation($id);
 
+        // Kotak "(Diisi oleh Dept. HRD)" hanya ada di lembar ke-2; null selama HRD
+        // belum memutuskan, dan baris-barisnya tercetak kosong seperti sebelumnya.
+        $keputusan = $nomor === 2 ? $this->evaluationDecisionModel->getByEvaluation($id) : null;
+
         // An authoritative (Word-rendered) copy always wins, even on Windows —
         // regenerating it would only reproduce the same file.
         $wordPath = PdfCache::path($key, PdfCache::ENGINE_WORD);
@@ -95,7 +102,7 @@ class ReportsController extends BaseController
         if ($this->isWindows()) {
             $evaluation['details'] = $this->evaluationDetailModel->where('penilaian_id', $id)->findAll();
 
-            $pdfPath = $this->generatePdfViaWordCom($evaluation);
+            $pdfPath = $this->generatePdfViaWordCom($evaluation, $keputusan);
             if ($pdfPath && file_exists($pdfPath)) {
                 $cached = PdfCache::adopt($key, PdfCache::ENGINE_WORD, $pdfPath);
 
@@ -110,7 +117,7 @@ class ReportsController extends BaseController
         }
 
         $grouped = $this->evaluationDetailModel->getByEvaluationGrouped($id);
-        $html    = $this->generatePdfHtmlSheet($evaluation, $grouped, $nomor);
+        $html    = $this->generatePdfHtmlSheet($evaluation, $grouped, $nomor, $keputusan);
 
         $cached = PdfCache::put($key, PdfCache::ENGINE_FALLBACK, $this->renderDompdf($html));
 
@@ -120,12 +127,27 @@ class ReportsController extends BaseController
     /**
      * Rasterize form HTML with DomPDF. Remote assets stay disabled — every image
      * the form needs is inlined as a data URI (see KopSurat).
+     *
+     * tempDir is pinned to writable/tmp instead of DomPDF's default
+     * sys_get_temp_dir(). On the shared host /tmp is inside open_basedir but not
+     * writable, so tempnam() there returns false — and DomPDF calls tempnam()
+     * whenever it has to subset an embedded font (Cpdf::processFont). The false
+     * then reaches fopen() as an empty path and the whole render dies with
+     * "ValueError: Path cannot be empty". Renders that only use the core PDF
+     * fonts never hit that path, which is why this stayed hidden until a sheet
+     * needed a glyph outside the core encoding.
      */
     private function renderDompdf(string $html): string
     {
+        $tmpDir = rtrim(WRITEPATH, '/\\') . DIRECTORY_SEPARATOR . 'tmp';
+        if (!is_dir($tmpDir)) {
+            mkdir($tmpDir, 0755, true);
+        }
+
         $opts = new \Dompdf\Options();
         $opts->set('isHtml5ParserEnabled', true);
         $opts->set('isRemoteEnabled', false);
+        $opts->set('tempDir', $tmpDir);
 
         $dompdf = new \Dompdf\Dompdf($opts);
         $dompdf->loadHtml($html);
@@ -152,7 +174,7 @@ class ReportsController extends BaseController
      * Returns the local PDF path on success, null on failure.
      * Only called on Windows — caller must guard with isWindows().
      */
-    private function generatePdfViaWordCom(array $eval): ?string
+    private function generatePdfViaWordCom(array $eval, ?array $keputusan = null): ?string
     {
         $templatePath = ROOTPATH . '27. FORM PENILAIAN PROBATION TEAM MEMBER.doc';
         if (!file_exists($templatePath)) {
@@ -169,7 +191,7 @@ class ReportsController extends BaseController
         $pdfPath = $tmpDir . DIRECTORY_SEPARATOR . $uid . '.pdf';
         $psPath  = $tmpDir . DIRECTORY_SEPARATOR . $uid . '.ps1';
 
-        $script = $this->buildWordComScript($eval, $templatePath, $pdfPath);
+        $script = $this->buildWordComScript($eval, $templatePath, $pdfPath, $keputusan);
         // Write with UTF-8 BOM so PowerShell reads it correctly
         file_put_contents($psPath, "\xEF\xBB\xBF" . $script);
 
@@ -190,7 +212,7 @@ class ReportsController extends BaseController
      * Build the PowerShell script that opens the Word template,
      * fills in all cells, and exports to PDF.
      */
-    private function buildWordComScript(array $eval, string $templatePath, string $pdfPath): string
+    private function buildWordComScript(array $eval, string $templatePath, string $pdfPath, ?array $keputusan = null): string
     {
         $nomor   = (int)($eval['nomor_penilaian'] ?? 1);
         $off     = ($nomor === 2) ? 8 : 0; // table index offset: sheet 2 uses tables 9-16
@@ -258,6 +280,7 @@ class ReportsController extends BaseController
         $L[] = '            $r2.Font.Bold = $false';
         $L[] = '        } catch {}';
         $L[] = '    }';
+        $L = array_merge($L, $this->setHrdLineFunctionLines());
         $L = array_merge($L, $this->pinVerifikasiPageLines());
         $L[] = '';
         $L[] = "    \$off = {$off}";
@@ -302,6 +325,7 @@ class ReportsController extends BaseController
         $L[] = "    SetScoreCell \$t6 1 2 '{$totalScore}'";
         $L[] = "    SetScoreCell \$t6 2 2 '{$avgScore}'";
         $L = array_merge($L, $this->buildVerifikasiLines($eval, '$off', $ps));
+        $L = array_merge($L, $this->buildKeputusanLines($nomor === 2 ? $keputusan : null, $ps));
         $L[] = '';
         // Export only the relevant page (ke-1 → page 1, ke-2 → page 2)
         $L[] = "    \$doc.ExportAsFixedFormat('{$pdf}', 17, \$false, 0, 3, {$nomor}, {$nomor})";
@@ -338,8 +362,23 @@ class ReportsController extends BaseController
             return redirect()->back()->with('error', 'Team Member tidak ditemukan');
         }
 
-        if ($role === 'team-leader' && (int)$employee['team_leader_id'] !== (int)session()->get('user_id')) {
-            return redirect()->back()->with('error', 'Akses ditolak');
+        if ($role === 'team-leader') {
+            // Dua sumber kepemilikan yang berbeda: employees.team_leader_id (pemilik
+            // saat ini) dan penilaian.team_leader_id (yang dulu menilai). Dashboard
+            // Team Leader menyusun daftarnya dari yang kedua, jadi kalau di sini hanya
+            // yang pertama yang diterima, tombol "PDF Semua" di dashboard itu selalu
+            // berakhir "Akses ditolak" begitu Team Member dipindah tangan atau belum
+            // punya Team Leader. generatePdf() memang sudah memakai aturan kedua.
+            $userId = (int) session()->get('user_id');
+
+            $boleh = (int) ($employee['team_leader_id'] ?? 0) === $userId
+                || $this->evaluationModel->where('employee_id', $employeeId)
+                                         ->where('team_leader_id', $userId)
+                                         ->countAllResults() > 0;
+
+            if (!$boleh) {
+                return redirect()->back()->with('error', 'Akses ditolak');
+            }
         }
 
         if ($role === 'probationary-employee') {
@@ -364,6 +403,10 @@ class ReportsController extends BaseController
             $eval2['details'] = $this->evaluationDetailModel->where('penilaian_id', $raw2['id'])->findAll();
         }
 
+        // Keputusan HRD menempel pada lembar ke-2 — belum ada lembar ke-2 berarti
+        // belum ada keputusan, dan kotaknya tercetak kosong.
+        $keputusan = $raw2 ? $this->evaluationDecisionModel->getByEvaluation((int)$raw2['id']) : null;
+
         $filename = 'Penilaian_' . ($employee['nik'] ?? $employeeId) . '_semua.pdf';
         $key      = PdfCache::keyForEmployee($employeeId);
 
@@ -376,7 +419,7 @@ class ReportsController extends BaseController
 
         // --- Primary: Word COM via PowerShell (Windows only) ---
         if ($this->isWindows()) {
-            $pdfPath = $this->generatePdfAllViaWordCom($eval1, $eval2);
+            $pdfPath = $this->generatePdfAllViaWordCom($eval1, $eval2, $keputusan);
             if ($pdfPath && file_exists($pdfPath)) {
                 $cached = PdfCache::adopt($key, PdfCache::ENGINE_WORD, $pdfPath);
 
@@ -392,14 +435,14 @@ class ReportsController extends BaseController
 
         $grouped1 = $this->evaluationDetailModel->getByEvaluationGrouped($raw1['id']);
         $grouped2 = $raw2 ? $this->evaluationDetailModel->getByEvaluationGrouped($raw2['id']) : null;
-        $html     = $this->generatePdfAllHtml($eval1, $eval2, $grouped1, $grouped2);
+        $html     = $this->generatePdfAllHtml($eval1, $eval2, $grouped1, $grouped2, $keputusan);
 
         $cached = PdfCache::put($key, PdfCache::ENGINE_FALLBACK, $this->renderDompdf($html));
 
         return $this->servePdf($cached, $filename);
     }
 
-    private function generatePdfAllViaWordCom(array $eval1, ?array $eval2): ?string
+    private function generatePdfAllViaWordCom(array $eval1, ?array $eval2, ?array $keputusan = null): ?string
     {
         $templatePath = ROOTPATH . '27. FORM PENILAIAN PROBATION TEAM MEMBER.doc';
         if (!file_exists($templatePath)) {
@@ -416,7 +459,7 @@ class ReportsController extends BaseController
         $pdfPath = $tmpDir . DIRECTORY_SEPARATOR . $uid . '.pdf';
         $psPath  = $tmpDir . DIRECTORY_SEPARATOR . $uid . '.ps1';
 
-        $script = $this->buildWordComScriptAll($eval1, $eval2, $templatePath, $pdfPath);
+        $script = $this->buildWordComScriptAll($eval1, $eval2, $templatePath, $pdfPath, $keputusan);
         file_put_contents($psPath, "\xEF\xBB\xBF" . $script);
 
         $cmd = 'powershell -NonInteractive -ExecutionPolicy Bypass -File "' . $psPath . '" 2>&1';
@@ -431,7 +474,7 @@ class ReportsController extends BaseController
         return $pdfPath;
     }
 
-    private function buildWordComScriptAll(array $eval1, ?array $eval2, string $templatePath, string $pdfPath): string
+    private function buildWordComScriptAll(array $eval1, ?array $eval2, string $templatePath, string $pdfPath, ?array $keputusan = null): string
     {
         $ps  = fn($v) => str_replace("'", "''", (string)$v);
         $tpl = $ps(str_replace('/', '\\', $templatePath));
@@ -462,12 +505,17 @@ class ReportsController extends BaseController
         $L[] = '        } catch {}';
         $L[] = '    }';
 
+        $L = array_merge($L, $this->setHrdLineFunctionLines());
         $L = array_merge($L, $this->pinVerifikasiPageLines());
 
         foreach ([[$eval1, 0], [$eval2, 8]] as [$eval, $off]) {
             if (!$eval) continue;
             $L = array_merge($L, $this->buildSheetLines($eval, $off, $ps));
         }
+
+        // Kotak HRD berdiri sendiri di bawah lembar ke-2, bukan bagian dari tabel
+        // per-lembar, jadi diisi sekali di sini — bukan di dalam buildSheetLines().
+        $L = array_merge($L, $this->buildKeputusanLines($eval2 ? $keputusan : null, $ps));
 
         $L[] = '';
         $L[] = "    \$doc.ExportAsFixedFormat('{$pdf}', 17)";
@@ -587,6 +635,76 @@ class ReportsController extends BaseController
         ];
     }
 
+    // ---------------------------------------------------------------
+    // KOTAK "(Diisi oleh Dept. HRD)"
+    // ---------------------------------------------------------------
+
+    /**
+     * PowerShell helper that fills one line of the HRD box in the Word template.
+     *
+     * The box is not a table — it is three ordinary paragraphs that each end in a
+     * run of underscores ("... per tanggal<tab>: ____________________"). The
+     * helper finds the paragraph by its label and rewrites it as everything up to
+     * the first underscore plus the value, so the label and its tab stops survive
+     * and the whole placeholder disappears. The paragraph mark is left out of the
+     * range (same trick as SetCell) — including it would merge the paragraph with
+     * the next one.
+     *
+     * The replacement is always shorter than the placeholder, which keeps the box
+     * on the same number of lines. That matters: sheet 2 is exported by page
+     * range, so a paragraph that wrapped onto an extra line would push the
+     * signature block off the exported page.
+     */
+    private function setHrdLineFunctionLines(): array
+    {
+        return [
+            '',
+            '    function SetHrdLine($label, $value) {',
+            '        try {',
+            '            foreach ($p in $script:doc.Paragraphs) {',
+            '                $t = $p.Range.Text',
+            '                if ($t.Contains($label) -and $t.Contains("__")) {',
+            '                    $prefix = $t.Substring(0, $t.IndexOf("_"))',
+            '                    $r = $script:doc.Range($p.Range.Start, [Math]::Max($p.Range.Start, $p.Range.End - 1))',
+            '                    $r.Text = $prefix + $value',
+            '                    break',
+            '                }',
+            '            }',
+            '        } catch {}',
+            '    }',
+        ];
+    }
+
+    /**
+     * PowerShell lines that write the HRD decision into the box on sheet 2.
+     *
+     * Returns nothing when HRD has not decided yet — the underscores then print
+     * as they always did, so the form can still be downloaded and filled by hand.
+     * Lines the HRD left empty are skipped for the same reason.
+     */
+    private function buildKeputusanLines(?array $keputusan, callable $ps): array
+    {
+        if (!$keputusan) {
+            return [];
+        }
+
+        $baris = [
+            'Diangkat sebagai karyawan tetap per tanggal' => $this->tanggalCetak($keputusan['tanggal_diangkat'] ?? null),
+            'Diakhiri masa kerjanya per tanggal'          => $this->tanggalCetak($keputusan['tanggal_diakhiri'] ?? null),
+            'Lain-lain'                                   => trim((string)($keputusan['lain_lain'] ?? '')),
+        ];
+
+        $L = ['', '    # KOTAK "(Diisi oleh Dept. HRD)" — lembar ke-2'];
+        foreach ($baris as $label => $value) {
+            if ($value === '') {
+                continue;
+            }
+            $L[] = "    SetHrdLine '{$ps($label)}' '{$ps($value)}'";
+        }
+
+        return count($L) > 2 ? $L : [];
+    }
+
     /**
      * Keep sheet 2 starting on its own page.
      *
@@ -661,6 +779,21 @@ class ReportsController extends BaseController
              . date('Y', $ts);
     }
 
+    /**
+     * '2026-09-01' → '01/09/2026', the same format the rest of the form prints
+     * dates in. Returns '' when the date is missing, so callers can skip the line.
+     */
+    private function tanggalCetak(?string $date): string
+    {
+        if (empty($date)) {
+            return '';
+        }
+
+        $ts = strtotime($date);
+
+        return $ts === false ? '' : date('d/m/Y', $ts);
+    }
+
     // ---------------------------------------------------------------
     // DOMPDF HTML GENERATION
     // ---------------------------------------------------------------
@@ -733,6 +866,8 @@ table.nm td { border:1px solid #000; padding:2px 4px; font-size:7.5pt; }
 /* HRD BOX */
 .hrd-box { border:1px solid #000; padding:6px 8px; margin-top:5px; font-size:8pt; line-height:1.8; }
 .hrd-line { display:inline-block; width:148px; border-bottom:1px solid #000; }
+/* Baris yang sudah diisi HRD boleh melebar mengikuti teksnya. */
+.hrd-line-isi { width:auto; min-width:148px; padding:0 3px; }
 
 /* SIGNATURES */
 table.sg { width:100%; border-collapse:collapse; margin-top:8px; }
@@ -754,7 +889,7 @@ p.vrf { font-size:7.5pt; font-style:italic; margin:6px 0 0; }
     /**
      * Render one sheet (ke-1 or ke-2) of the evaluation form as HTML.
      */
-    protected function generatePdfHtmlSheet(array $evaluation, array $grouped, int $nomorSheet): string
+    protected function generatePdfHtmlSheet(array $evaluation, array $grouped, int $nomorSheet, ?array $keputusan = null): string
     {
         $isSheet2 = $nomorSheet >= 2;
 
@@ -789,7 +924,7 @@ p.vrf { font-size:7.5pt; font-style:italic; margin:6px 0 0; }
 
         ob_start(); ?>
 <!DOCTYPE html><html><head><meta charset="UTF-8"><?= $this->pdfCss() ?></head><body>
-<?= $this->renderPdfPage($evaluation, $groupedByKat, $nomorSheet, $isSheet2, $tglPenilaian, $tglMasuk, $totalNilai, $rataRata, $catLabels) ?>
+<?= $this->renderPdfPage($evaluation, $groupedByKat, $nomorSheet, $isSheet2, $tglPenilaian, $tglMasuk, $totalNilai, $rataRata, $catLabels, $keputusan) ?>
 </body></html>
 <?php
         return ob_get_clean();
@@ -798,7 +933,7 @@ p.vrf { font-size:7.5pt; font-style:italic; margin:6px 0 0; }
     /**
      * Render combined PDF for all evaluations (both sheets).
      */
-    protected function generatePdfAllHtml(array $eval1, ?array $eval2, array $grouped1, ?array $grouped2): string
+    protected function generatePdfAllHtml(array $eval1, ?array $eval2, array $grouped1, ?array $grouped2, ?array $keputusan = null): string
     {
         $tglPenilaian1 = !empty($eval1['tanggal_penilaian'])
             ? date('d/m/Y', strtotime($eval1['tanggal_penilaian'])) : '-';
@@ -821,7 +956,7 @@ p.vrf { font-size:7.5pt; font-style:italic; margin:6px 0 0; }
 
         ob_start(); ?>
 <!DOCTYPE html><html><head><meta charset="UTF-8"><?= $this->pdfCss() ?></head><body>
-<?= $this->renderPdfPage($eval1, $groupedByKat1, 1, false, $tglPenilaian1, $tglMasuk1, $total1, $rata1, $catLabels) ?>
+<?= $this->renderPdfPage($eval1, $groupedByKat1, 1, false, $tglPenilaian1, $tglMasuk1, $total1, $rata1, $catLabels, null) ?>
 <?php
         if ($eval2 && $grouped2) {
             $tglPenilaian2 = !empty($eval2['tanggal_penilaian'])
@@ -834,7 +969,7 @@ p.vrf { font-size:7.5pt; font-style:italic; margin:6px 0 0; }
             $groupedByKat2 = [];
             foreach ($grouped2 as $row) { $groupedByKat2[$row['kategori'] ?? 'Lainnya'][] = $row; }
             echo '<div class="page-break"></div>';
-            echo $this->renderPdfPage($eval2, $groupedByKat2, 2, true, $tglPenilaian2, $tglMasuk2, $total2, $rata2, $catLabels);
+            echo $this->renderPdfPage($eval2, $groupedByKat2, 2, true, $tglPenilaian2, $tglMasuk2, $total2, $rata2, $catLabels, $keputusan);
         }
 ?>
 </body></html>
@@ -848,7 +983,7 @@ p.vrf { font-size:7.5pt; font-style:italic; margin:6px 0 0; }
     private function renderPdfPage(
         array $evaluation, array $grouped, int $nomorSheet, bool $isSheet2,
         string $tglPenilaian, string $tglMasuk, int $totalNilai, string $rataRata,
-        array $catLabels
+        array $catLabels, ?array $keputusan = null
     ): string {
         $h      = fn($v) => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
         // The Word template prints "01/03" on both sheets — it is static text in
@@ -985,12 +1120,20 @@ p.vrf { font-size:7.5pt; font-style:italic; margin:6px 0 0; }
 </table>
 
 <?php if ($isSheet2): ?>
+<?php
+  // Baris yang belum/tidak diisi HRD tetap tercetak sebagai garis kosong, supaya
+  // form yang diunduh sebelum HRD memutuskan masih bisa diisi tangan.
+  $kepDiangkat = $h($this->tanggalCetak($keputusan['tanggal_diangkat'] ?? null));
+  $kepDiakhiri = $h($this->tanggalCetak($keputusan['tanggal_diakhiri'] ?? null));
+  $kepLainLain = $h(trim((string)($keputusan['lain_lain'] ?? '')));
+  $kepCls      = fn($v) => $v !== '' ? 'hrd-line hrd-line-isi' : 'hrd-line';
+?>
 <div class="hrd-box">
   <strong>(Diisi oleh Dept. HRD)</strong><br>
   Memperhatikan penilaian tersebut di atas, maka karyawan tersebut dipertimbangkan dan atau diputuskan untuk :<br>
-  Diangkat sebagai karyawan tetap per tanggal &nbsp;: <span class="hrd-line"></span><br>
-  Diakhiri masa kerjanya per tanggal &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: <span class="hrd-line"></span><br>
-  Lain-lain &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: <span class="hrd-line"></span>
+  Diangkat sebagai karyawan tetap per tanggal &nbsp;: <span class="<?= $kepCls($kepDiangkat) ?>"><?= $kepDiangkat ?></span><br>
+  Diakhiri masa kerjanya per tanggal &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: <span class="<?= $kepCls($kepDiakhiri) ?>"><?= $kepDiakhiri ?></span><br>
+  Lain-lain &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: <span class="<?= $kepCls($kepLainLain) ?>"><?= $kepLainLain ?></span>
 </div>
 <?php endif; ?>
 

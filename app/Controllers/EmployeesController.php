@@ -189,7 +189,6 @@ class EmployeesController extends BaseController
             'email' => 'permit_empty|valid_email',
             'tanggal_masuk' => 'permit_empty|valid_date',
             'mulai_probation' => 'required|valid_date',
-            'status' => 'required|in_list[pending,lulus,tidak-lulus,warning]',
             'team_leader_id' => 'permit_empty|integer',
         ]);
 
@@ -197,6 +196,10 @@ class EmployeesController extends BaseController
             return redirect()->back()->withInput()->with('errors', $validation->getErrors());
         }
 
+        // `status` sengaja tidak diambil dari request. Status probation hanya boleh
+        // berubah lewat Keputusan HRD pada penilaian ke-2
+        // (EvaluationsController::storeKeputusan()), supaya karyawan tidak bisa
+        // dinyatakan lulus/tidak lulus sebelum kotak "(Diisi oleh Dept. HRD)" diisi.
         $newData = [
             'nik'           => $this->request->getPost('nik'),
             'nama'          => $this->request->getPost('nama'),
@@ -205,7 +208,6 @@ class EmployeesController extends BaseController
             'email'         => $this->request->getPost('email'),
             'tanggal_masuk' => $this->request->getPost('tanggal_masuk'),
             'mulai_probation' => $this->request->getPost('mulai_probation'),
-            'status'        => $this->request->getPost('status'),
             'team_leader_id' => $this->request->getPost('team_leader_id') ?: null,
             'jenis_kelamin'  => $this->request->getPost('jenis_kelamin') ?: null,
             'tanggal_lahir'  => $this->request->getPost('tanggal_lahir') ?: null,

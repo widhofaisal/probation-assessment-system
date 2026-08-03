@@ -14,13 +14,12 @@
  */
 ?>
 <script>
-/* Pre-paint: jalan sebelum <body> dirender supaya tidak ada kedipan putih. */
+/* Pre-paint: jalan sebelum <body> dirender supaya tidak ada kedipan putih.
+   Default aplikasi adalah mode terang — preferensi sistem (prefers-color-scheme)
+   sengaja tidak dipakai. Mode gelap hanya aktif bila pengguna memilihnya sendiri. */
 (function () {
     try {
         var saved = localStorage.getItem('theme');
-        if (saved !== 'dark' && saved !== 'light') {
-            saved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        }
         if (saved === 'dark') document.documentElement.classList.add('dark');
     } catch (e) {}
 })();
@@ -31,6 +30,9 @@
    DARK MODE
    Semua aturan diberi prefix html.dark sehingga tampilan terang tidak berubah.
    ========================================================================= */
+/* Default: mode terang, tidak mengikuti tema OS. */
+html { color-scheme: light; }
+
 html.dark {
     color-scheme: dark;
 

@@ -256,13 +256,27 @@ function dismissToast(t) {
 }
 
 // ===== CONFIRM MODAL =====
+// opts (opsional): { tone: 'red'|'amber', faceIcon, okIcon } — dipakai agar modal
+// ini bisa dipakai untuk peringatan biasa, bukan cuma konfirmasi hapus.
 var _confirmCb = null;
-function showConfirm(message, onConfirm, title, confirmLabel) {
-    title = title || 'Konfirmasi Hapus';
-    confirmLabel = confirmLabel || 'Hapus';
-    document.getElementById('confirmTitle').textContent = title;
+function showConfirm(message, onConfirm, title, confirmLabel, opts) {
+    opts = opts || {};
+    var tone = opts.tone === 'amber' ? 'amber' : 'red';
+
+    document.getElementById('confirmTitle').textContent = title || 'Konfirmasi Hapus';
     document.getElementById('confirmMessage').textContent = message;
-    document.getElementById('confirmOk').innerHTML = '<i class="fas fa-trash text-xs"></i> ' + confirmLabel;
+
+    document.getElementById('confirmIconWrap').className =
+        'w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 bg-' + tone + '-100';
+    document.getElementById('confirmIcon').className =
+        'fas ' + (opts.faceIcon || 'fa-exclamation-triangle') + ' text-' + tone + '-600';
+
+    var ok = document.getElementById('confirmOk');
+    ok.className = 'px-5 py-2.5 bg-' + tone + '-600 hover:bg-' + tone + '-700 text-white rounded-xl ' +
+                   'font-semibold text-sm transition flex items-center gap-2';
+    ok.innerHTML = '<i class="fas ' + (opts.okIcon || 'fa-trash') + ' text-xs"></i> ' +
+                   (confirmLabel || 'Hapus');
+
     _confirmCb = onConfirm;
     document.getElementById('confirmModal').classList.remove('hidden');
 }
@@ -287,13 +301,55 @@ document.addEventListener('keydown', function(e) {
 });
 
 // ===== PDF DOWNLOAD WITH TOAST =====
-// Stays on current page; fetches PDF in background; opens new tab only when ready.
+// Semua tombol PDF di aplikasi memanggil fungsi ini, jadi pemeriksaan Keputusan
+// HRD cukup dipasang di sini — berlaku untuk HRD, Team Leader, maupun Team Member.
 function pdfDownload(url) {
+    cekKeputusanHrd(url).then(function (perluKonfirmasi) {
+        if (!perluKonfirmasi) {
+            mulaiUnduhPdf(url);
+            return;
+        }
+
+        showConfirm(
+            'HRD belum memberikan keputusan untuk penilaian ke-2 ini. PDF tetap bisa ' +
+            'diunduh, tetapi bagian "(Diisi oleh Dept. HRD)" akan tercetak kosong.',
+            function () { mulaiUnduhPdf(url); },
+            'Keputusan HRD belum diisi',
+            'Tetap Unduh',
+            { tone: 'amber', faceIcon: 'fa-gavel', okIcon: 'fa-file-pdf' }
+        );
+    });
+}
+
+// Tanya server apakah PDF ini memuat lembar ke-2 yang belum diputuskan HRD.
+// URL-nya sendiri yang menentukan pertanyaannya: /reports/pdf/<penilaian> atau
+// /reports/pdf-all/<team member>. Kalau pengecekan gagal, unduhan tetap jalan —
+// peringatan ini tidak boleh jadi penghalang.
+function cekKeputusanHrd(url) {
+    var m = String(url).match(/\/reports\/pdf(-all)?\/(\d+)/);
+    if (!m) return Promise.resolve(false);
+
+    var query = m[1] ? 'employee=' + m[2] : 'eval=' + m[2];
+
+    return fetch('/evaluations/keputusan-status?' + query, { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) { return !!(j && j.perlu_konfirmasi); })
+        .catch(function () { return false; });
+}
+
+// Stays on current page; fetches PDF in background; opens new tab only when ready.
+function mulaiUnduhPdf(url) {
     var loadingToast = showToast('Sedang memproses PDF, mohon tunggu...', 'info', 0);
 
     fetch(url, { credentials: 'same-origin' })
         .then(function(response) {
             if (!response.ok) throw new Error('HTTP ' + response.status);
+            // Penolakan akses dijawab server dengan redirect ke halaman biasa, jadi
+            // yang sampai ke sini HTML ber-status 200 — bukan berkas PDF. Tanpa
+            // pemeriksaan ini halaman tersebut ikut dibuka di tab baru dan pesan
+            // errornya muncul di tempat yang tidak semestinya.
+            var tipe = response.headers.get('content-type') || '';
+            if (tipe.indexOf('application/pdf') === -1) throw new Error('bukan-pdf');
             return response.blob();
         })
         .then(function(blob) {
@@ -311,9 +367,15 @@ function pdfDownload(url) {
             }
             showToast('PDF berhasil dibuka di tab baru!', 'success', 4000);
         })
-        .catch(function() {
+        .catch(function(e) {
             dismissToast(loadingToast);
-            showToast('Gagal menghasilkan PDF. Silakan coba lagi.', 'error', 6000);
+            showToast(
+                (e && e.message === 'bukan-pdf')
+                    ? 'PDF tidak bisa dibuka — permintaan ditolak server (akses ditolak ' +
+                      'atau data penilaian tidak ditemukan). Coba muat ulang halaman.'
+                    : 'Gagal menghasilkan PDF. Silakan coba lagi.',
+                'error', 7000
+            );
         });
 }
 

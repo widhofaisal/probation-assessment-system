@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Libraries\PdfCache;
 use App\Models\EvaluationModel;
+use App\Models\EvaluationDecisionModel;
 use App\Models\EvaluationDetailModel;
 use App\Models\EmployeeModel;
 
@@ -11,12 +12,14 @@ class EvaluationsController extends BaseController
 {
     protected $evaluationModel;
     protected $evaluationDetailModel;
+    protected $evaluationDecisionModel;
     protected $employeeModel;
 
     public function __construct()
     {
         $this->evaluationModel = new EvaluationModel();
         $this->evaluationDetailModel = new EvaluationDetailModel();
+        $this->evaluationDecisionModel = new EvaluationDecisionModel();
         $this->employeeModel = new EmployeeModel();
     }
 
@@ -51,6 +54,19 @@ class EvaluationsController extends BaseController
             }
             if ($nomor === 1 && !$evalsByEmployee[$eid]['eval1']) $evalsByEmployee[$eid]['eval1'] = $eval;
             if ($nomor === 2 && !$evalsByEmployee[$eid]['eval2']) $evalsByEmployee[$eid]['eval2'] = $eval;
+        }
+
+        // Keputusan HRD menempel pada lembar ke-2 — diambil sekaligus agar tidak
+        // ada query per baris tabel.
+        $eval2Ids = [];
+        foreach ($evalsByEmployee as $grp) {
+            if ($grp['eval2']) $eval2Ids[] = (int)$grp['eval2']['id'];
+        }
+        $keputusanMap = $this->evaluationDecisionModel->mapByEvaluations($eval2Ids);
+        foreach ($evalsByEmployee as $eid => $grp) {
+            $evalsByEmployee[$eid]['keputusan'] = $grp['eval2']
+                ? ($keputusanMap[(int)$grp['eval2']['id']] ?? null)
+                : null;
         }
 
         $data = [
@@ -245,6 +261,142 @@ class EvaluationsController extends BaseController
         }
 
         return redirect()->back()->with('error', 'Gagal memperbarui penilaian');
+    }
+
+    /**
+     * Simpan kotak "(Diisi oleh Dept. HRD)" milik lembar penilaian ke-2.
+     *
+     * Ini gerbang terakhir masa probation: Team Leader menutup penilaian ke-2,
+     * lalu HRD mengisi keputusan di sini, dan baru dari sinilah employees.status
+     * berubah menjadi lulus / tidak-lulus / warning. Form data karyawan sudah
+     * tidak bisa lagi mengubah status (lihat EmployeesController::update()).
+     */
+    public function storeKeputusan(int $id)
+    {
+        if (session()->get('role') !== 'hrd') {
+            return redirect()->to('/auth/login');
+        }
+
+        $evaluation = $this->evaluationModel->find($id);
+
+        if (!$evaluation) {
+            return redirect()->back()->with('error', 'Penilaian tidak ditemukan');
+        }
+
+        if ((int)($evaluation['nomor_penilaian'] ?? 1) !== 2) {
+            return redirect()->back()->with('error', 'Keputusan HRD hanya diisi pada penilaian ke-2');
+        }
+
+        if (($evaluation['status'] ?? '') !== 'submitted') {
+            return redirect()->back()->with('error', 'Penilaian ke-2 belum diselesaikan Team Leader');
+        }
+
+        $tanggalDiangkat = $this->request->getPost('tanggal_diangkat') ?: null;
+        $tanggalDiakhiri = $this->request->getPost('tanggal_diakhiri') ?: null;
+        $lainLain        = trim((string)$this->request->getPost('lain_lain'));
+        $statusAkhir     = (string)$this->request->getPost('status_akhir');
+
+        if (!in_array($statusAkhir, EvaluationDecisionModel::STATUS_AKHIR, true)) {
+            return redirect()->back()->with('error', 'Status akhir belum dipilih');
+        }
+
+        if (!$tanggalDiangkat && !$tanggalDiakhiri && $lainLain === '') {
+            return redirect()->back()
+                ->with('error', 'Isi minimal satu baris keputusan (diangkat / diakhiri / lain-lain)');
+        }
+
+        if (mb_strlen($lainLain) > EvaluationDecisionModel::MAX_LAIN_LAIN) {
+            return redirect()->back()->with('error',
+                'Keterangan "Lain-lain" maksimal ' . EvaluationDecisionModel::MAX_LAIN_LAIN . ' karakter');
+        }
+
+        $employeeId = (int)$evaluation['employee_id'];
+        $existing   = $this->evaluationDecisionModel->getByEvaluation($id);
+
+        $keputusanData = [
+            'penilaian_id'     => $id,
+            'employee_id'      => $employeeId,
+            'tanggal_diangkat' => $tanggalDiangkat,
+            'tanggal_diakhiri' => $tanggalDiakhiri,
+            'lain_lain'        => $lainLain !== '' ? $lainLain : null,
+            'status_akhir'     => $statusAkhir,
+            'hrd_id'           => session()->get('user_id'),
+        ];
+
+        try {
+            if ($existing) {
+                $this->evaluationDecisionModel->update($existing['id'], $keputusanData);
+                $keputusanId = (int)$existing['id'];
+            } else {
+                $keputusanId = (int)$this->evaluationDecisionModel->insert($keputusanData);
+            }
+
+            // Status akhir karyawan mengikuti keputusan ini.
+            $employee = $this->employeeModel->find($employeeId);
+            $this->employeeModel->skipValidation(true)->update($employeeId, ['status' => $statusAkhir]);
+
+            // Kotak HRD ikut tercetak di PDF, jadi hasil render lama sudah basi.
+            PdfCache::forget(PdfCache::keyForEvaluation($id));
+            PdfCache::forget(PdfCache::keyForEmployee($employeeId));
+
+            $this->logAudit($existing ? 'UPDATE' : 'CREATE', 'penilaian_keputusan',
+                            $keputusanId, $existing, $keputusanData);
+
+            $nama = $employee['nama'] ?? 'Team Member';
+
+            return redirect()->to('/evaluations')->with('success',
+                'Keputusan HRD tersimpan. Status ' . $nama . ' menjadi '
+                . EvaluationDecisionModel::statusLabel($statusAkhir) . '.');
+
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Gagal menyimpan keputusan: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Apakah PDF ini perlu dikonfirmasi dulu karena Keputusan HRD belum diisi?
+     *
+     * Dipanggil pdfDownload() di layout sebelum berkas diunduh — berlaku untuk
+     * ketiga role, karena ketiganya bisa mengunduh lembar ke-2. Lembar yang
+     * belum diputuskan tetap boleh diunduh; yang penting pengunduh tahu bahwa
+     * kotak "(Diisi oleh Dept. HRD)" akan tercetak kosong.
+     *
+     * Terima ?eval=ID (satu lembar) atau ?employee=ID (PDF gabungan). Jawabannya
+     * hanya boolean "ada keputusan atau belum", jadi cukup dibatasi ke pengguna
+     * yang sudah login — kontrol akses berkasnya sendiri tetap di ReportsController.
+     */
+    public function keputusanStatus()
+    {
+        if (!session()->has('user_id')) {
+            return $this->response->setStatusCode(401)->setJSON(['perlu_konfirmasi' => false]);
+        }
+
+        $evalId     = (int) $this->request->getGet('eval');
+        $employeeId = (int) $this->request->getGet('employee');
+
+        $eval2 = null;
+
+        if ($evalId) {
+            $eval = $this->evaluationModel->find($evalId);
+            // Lembar ke-1 tidak punya kotak HRD — tidak ada yang perlu dikonfirmasi.
+            if ($eval && (int)($eval['nomor_penilaian'] ?? 1) === 2) {
+                $eval2 = $eval;
+            }
+        } elseif ($employeeId) {
+            $eval2 = $this->evaluationModel
+                ->where('employee_id', $employeeId)
+                ->where('nomor_penilaian', 2)
+                ->first();
+        }
+
+        // Belum ada lembar ke-2 sama sekali → belum waktunya HRD memutuskan.
+        if (!$eval2) {
+            return $this->response->setJSON(['perlu_konfirmasi' => false]);
+        }
+
+        $keputusan = $this->evaluationDecisionModel->getByEvaluation((int) $eval2['id']);
+
+        return $this->response->setJSON(['perlu_konfirmasi' => $keputusan === null]);
     }
 
     /**

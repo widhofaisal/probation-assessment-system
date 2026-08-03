@@ -329,14 +329,19 @@ $bulanId = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 
                     <p class="hidden text-xs text-red-500 mt-1" id="eerr_probation">Tanggal mulai probation wajib diisi</p>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Status Probation <span class="text-red-500">*</span></label>
-                    <select name="status" id="e_status"
-                            class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm transition">
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Status Probation</label>
+                    <select id="e_status" disabled
+                            class="w-full px-4 py-2.5 border border-gray-200 rounded-lg bg-gray-50 text-gray-500 text-sm cursor-not-allowed">
                         <option value="pending">Pending</option>
                         <option value="lulus">Lulus</option>
                         <option value="tidak-lulus">Tidak Lulus</option>
                         <option value="warning">Warning</option>
                     </select>
+                    <p class="text-xs text-gray-400 mt-1">
+                        <i class="fas fa-lock mr-1"></i>Ditentukan lewat Keputusan HRD di
+                        <a href="/evaluations" class="text-blue-600 hover:text-blue-800 underline">Daftar Penilaian</a>,
+                        setelah penilaian ke-2 selesai.
+                    </p>
                 </div>
                 <div class="md:col-span-2">
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Team Leader</label>
