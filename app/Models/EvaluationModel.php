@@ -14,6 +14,7 @@ class EvaluationModel extends Model
     protected $allowedFields = ['employee_id', 'nomor_penilaian', 'team_leader_id', 'tanggal_penilaian',
                                 'tanggal_mulai_penilaian', 'tanggal_selesai_penilaian',
                                 'nilai_total', 'status', 'catatan_team_leader',
+                                'dilihat_at', 'diunduh_at',
                                 'created_at', 'updated_at'];
     protected $useTimestamps = true;
     protected $createdField  = 'created_at';
@@ -93,6 +94,85 @@ class EvaluationModel extends Model
             ->getRow();
 
         return $result->nilai ?? 0;
+    }
+
+    /**
+     * Tandai bahwa Team Member sudah melihat hasil penilaiannya.
+     *
+     * Stempel first-touch: hanya diisi kalau masih kosong, jadi yang tersimpan
+     * adalah kapan hasil ini PERTAMA KALI diterima — itu yang berguna kalau
+     * nanti masa probation dipersoalkan. Riwayat kunjungan berikutnya tetap
+     * lengkap di audit_logs.
+     *
+     * $employeeId dipakai sebagai pagar: penilaian milik orang lain tidak
+     * pernah ikut tertandai walaupun ID-nya salah oper.
+     */
+    public function markViewed(int $evaluationId, int $employeeId): bool
+    {
+        return $this->stampAccess($evaluationId, $employeeId, ['dilihat_at'], 'VIEW_RESULT',
+                                  'Team Member melihat hasil penilaian');
+    }
+
+    /**
+     * Tandai bahwa Team Member sudah mengunduh PDF penilaiannya.
+     *
+     * Mengunduh berarti melihat, jadi dilihat_at ikut terisi kalau member
+     * langsung menekan tombol unduh tanpa membuka halaman laporan lebih dulu.
+     */
+    public function markDownloaded(int $evaluationId, int $employeeId): bool
+    {
+        return $this->stampAccess($evaluationId, $employeeId, ['diunduh_at', 'dilihat_at'], 'DOWNLOAD_PDF',
+                                  'Team Member mengunduh PDF penilaian');
+    }
+
+    /**
+     * Isi kolom-kolom stempel yang masih NULL, lalu catat ke audit trail
+     * kalau memang ada yang berubah.
+     *
+     * Kolom yang sudah terisi tidak pernah ditimpa — kondisi "IS NULL" ada di
+     * dalam UPDATE-nya sendiri supaya dua request berbarengan tidak saling
+     * menimpa stempel pertama.
+     */
+    protected function stampAccess(int $evaluationId, int $employeeId, array $columns, string $action, string $description): bool
+    {
+        $db      = \Config\Database::connect();
+        $changed = false;
+
+        foreach ($columns as $column) {
+            $db->table($this->table)
+                ->where('id', $evaluationId)
+                ->where('employee_id', $employeeId)
+                ->where($column . ' IS NULL', null, false)
+                ->set($column, 'NOW()', false)
+                ->update();
+
+            if ($db->affectedRows() > 0) {
+                $changed = true;
+            }
+        }
+
+        if ($changed && session()->has('user_id')) {
+            model('AuditLogModel')->logAction(
+                (int) session()->get('user_id'),
+                $action,
+                $this->table,
+                $evaluationId,
+                null,
+                null,
+                $description
+            );
+        }
+
+        return $changed;
+    }
+
+    /**
+     * Jumlah penilaian yang belum pernah dibuka Team Member-nya — dipakai
+     * sebagai kartu statistik di dashboard HRD.
+     */
+    public function countUnviewed(): int
+    {
+        return $this->where('dilihat_at', null)->countAllResults();
     }
 
     /**

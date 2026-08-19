@@ -3,6 +3,7 @@
 namespace App\Controllers;
 
 use App\Models\EmployeeModel;
+use App\Models\EvaluationDecisionModel;
 use App\Models\EvaluationModel;
 use App\Models\UserModel;
 
@@ -10,12 +11,14 @@ class DashboardController extends BaseController
 {
     protected $employeeModel;
     protected $evaluationModel;
+    protected $evaluationDecisionModel;
     protected $userModel;
 
     public function __construct()
     {
         $this->employeeModel = new EmployeeModel();
         $this->evaluationModel = new EvaluationModel();
+        $this->evaluationDecisionModel = new EvaluationDecisionModel();
         $this->userModel = new UserModel();
     }
 
@@ -35,6 +38,7 @@ class DashboardController extends BaseController
             'tidak_lulus' => $this->employeeModel->countByStatus('tidak-lulus'),
             'warning' => $this->employeeModel->countByStatus('warning'),
             'total_evaluations' => $this->evaluationModel->countAllResults(),
+            'belum_dilihat' => $this->evaluationModel->countUnviewed(),
         ];
 
         $recentEvalsRaw = $this->evaluationModel
@@ -141,7 +145,7 @@ class DashboardController extends BaseController
 
         // Ambil semua evaluasi TL ini, diurutkan terbaru dulu
         $allEvals = $db->table('penilaian')
-            ->select('employee_id, id, tanggal_penilaian, nomor_penilaian')
+            ->select('employee_id, id, tanggal_penilaian, nomor_penilaian, dilihat_at, diunduh_at')
             ->where('team_leader_id', $teamLeaderId)
             ->orderBy('tanggal_penilaian', 'DESC')
             ->get()->getResultArray();
@@ -158,14 +162,28 @@ class DashboardController extends BaseController
                     'total_penilaian' => 0,
                     'eval1_id'        => null,
                     'eval2_id'        => null,
+                    'eval1_ack'       => null,
+                    'eval2_ack'       => null,
                 ];
             }
             $lastEvalMap[$eid]['total_penilaian']++;
-            if ($nomor === 1 && !$lastEvalMap[$eid]['eval1_id']) $lastEvalMap[$eid]['eval1_id'] = $ev['id'];
-            if ($nomor === 2 && !$lastEvalMap[$eid]['eval2_id']) $lastEvalMap[$eid]['eval2_id'] = $ev['id'];
+            if ($nomor === 1 && !$lastEvalMap[$eid]['eval1_id']) {
+                $lastEvalMap[$eid]['eval1_id']  = $ev['id'];
+                $lastEvalMap[$eid]['eval1_ack'] = $ev;
+            }
+            if ($nomor === 2 && !$lastEvalMap[$eid]['eval2_id']) {
+                $lastEvalMap[$eid]['eval2_id']  = $ev['id'];
+                $lastEvalMap[$eid]['eval2_ack'] = $ev;
+            }
         }
 
         $today          = new \DateTime('today');
+        // Keputusan Lulus per karyawan, sekali query — dipakai tombol SK di daftar.
+        $skMap = [];
+        foreach ($this->evaluationDecisionModel->where('status_akhir', 'lulus')->findAll() as $kep) {
+            $skMap[(int) $kep['employee_id']] = $kep;
+        }
+
         $intervalHarian = 45; // Siklus penilaian: ~1,5 bulan
         $maxPenilaian   = 2;  // Maks 2x penilaian selama probation 3 bulan
 
@@ -175,7 +193,15 @@ class DashboardController extends BaseController
             $emp['last_eval_id'] = $lastEval['last_eval_id'] ?? null;
             $emp['eval1_id']     = $lastEval['eval1_id'] ?? null;
             $emp['eval2_id']     = $lastEval['eval2_id'] ?? null;
+            $emp['eval1_ack']    = $lastEval['eval1_ack'] ?? null;
+            $emp['eval2_ack']    = $lastEval['eval2_ack'] ?? null;
             $mulai          = $emp['mulai_probation'] ? new \DateTime($emp['mulai_probation']) : null;
+
+            // Surat Keputusan hanya ada setelah HRD memutuskan Lulus dan mengisi
+            // nomor SK-nya. Disetel di sini, sebelum cabang-cabang di bawah:
+            // karyawan yang statusnya sudah final justru keluar lewat continue,
+            // dan merekalah satu-satunya yang punya SK.
+            $emp['sk_siap'] = EvaluationDecisionModel::skSiap($skMap[(int) $emp['id']] ?? null);
 
             // Status final dari HRD → tidak perlu logika siklus
             if ($emp['status'] !== 'pending') {
@@ -255,12 +281,18 @@ class DashboardController extends BaseController
 
         $evaluations = $this->evaluationModel->getByEmployee($employee['id']);
 
+        // Surat Keputusan pengangkatan muncul sendiri begitu HRD memutuskan Lulus
+        // dan melengkapi nomor SK-nya; null selama itu belum terjadi.
+        $keputusan = $this->evaluationDecisionModel->getLulusByEmployee((int) $employee['id']);
+        $sk        = EvaluationDecisionModel::skSiap($keputusan) ? $keputusan : null;
+
         $data = [
             'title' => 'Dashboard',
             'greeting' => $this->getGreeting(),
             'user' => session()->get(),
             'employee' => $employee,
             'evaluations' => $evaluations,
+            'sk' => $sk,
         ];
 
         return view('Dashboard/probationary', $data);
@@ -299,6 +331,7 @@ class DashboardController extends BaseController
             'warning' => $this->employeeModel->countByStatus('warning'),
             'total_evaluations' => $this->evaluationModel->countAllResults(),
             'submitted_evaluations' => $this->evaluationModel->where('status', 'submitted')->countAllResults(),
+            'belum_dilihat' => $this->evaluationModel->countUnviewed(),
         ];
     }
 

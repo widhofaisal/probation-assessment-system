@@ -87,11 +87,22 @@
                             <p class="text-2xl font-bold <?= $nilaiColor ?>"><?= number_format($eval['nilai_total'], 2) ?></p>
                             <p class="text-xs text-gray-400">dari 10</p>
                         </div>
-                        <a href="/reports/evaluation/<?= $eval['id'] ?>"
-                           class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-lg transition flex items-center gap-1.5">
-                            <i class="fas fa-print text-xs"></i> Lihat Laporan
-                        </a>
+                        <div class="flex flex-col gap-1.5">
+                            <a href="/reports/evaluation/<?= $eval['id'] ?>"
+                               class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-lg transition flex items-center gap-1.5">
+                                <i class="fas fa-print text-xs"></i> Lihat Laporan
+                            </a>
+                            <button onclick="pdfDownload('/reports/pdf/<?= $eval['id'] ?>')"
+                                    class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition flex items-center gap-1.5 cursor-pointer">
+                                <i class="fas fa-file-pdf text-xs"></i> Download PDF
+                            </button>
+                        </div>
                     </div>
+                </div>
+
+                <!-- Tanda terima: apa yang sudah Anda lakukan atas hasil ini -->
+                <div class="px-6 pt-3">
+                    <?= ack_badge_member($eval) ?>
                 </div>
 
                 <!-- Breakdown per kategori -->

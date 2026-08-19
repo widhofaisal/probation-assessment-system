@@ -118,12 +118,14 @@
                                                class="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-semibold rounded-lg transition flex items-center gap-1.5">
                                                 <i class="fas fa-eye text-xs"></i> Penilaian 1
                                             </a>
+                                            <?= ack_badge($emp['eval1_ack']) ?>
                                         <?php endif; ?>
                                         <?php if (!empty($emp['eval2_id'])): ?>
                                             <a href="/evaluations/<?= $emp['eval2_id'] ?>"
                                                class="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 text-xs font-semibold rounded-lg transition flex items-center gap-1.5">
                                                 <i class="fas fa-eye text-xs"></i> Penilaian 2
                                             </a>
+                                            <?= ack_badge($emp['eval2_ack']) ?>
                                         <?php endif; ?>
                                         <?php if (!empty($emp['eval1_id']) && !empty($emp['eval2_id'])): ?>
                                             <button onclick="pdfDownload('/reports/pdf-all/<?= $emp['id'] ?>')"
@@ -135,6 +137,13 @@
                                                class="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold rounded-lg transition flex items-center gap-1.5 cursor-pointer">
                                                 <i class="fas fa-file-pdf text-xs"></i> PDF Ke-1
                                             </button>
+                                        <?php endif; ?>
+                                        <?php if (!empty($emp['sk_siap'])): ?>
+                                            <a href="/reports/sk/<?= $emp['id'] ?>" target="_blank"
+                                               class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg transition flex items-center gap-1.5"
+                                               title="Surat Keputusan pengangkatan karyawan tetap">
+                                                <i class="fas fa-file-contract text-xs"></i> SK
+                                            </a>
                                         <?php endif; ?>
                                         <?php if (empty($emp['eval1_id'])): ?>
                                             <span class="text-gray-400 text-xs">Sudah dinilai</span>

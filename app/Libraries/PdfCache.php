@@ -40,6 +40,12 @@ final class PdfCache
         return 'eval_all_' . $employeeId;
     }
 
+    /** Cache key for an employee's Surat Keputusan pengangkatan. */
+    public static function keyForSk(int $employeeId): string
+    {
+        return 'sk_' . $employeeId;
+    }
+
     public static function dir(): string
     {
         return rtrim(WRITEPATH, '/\\') . DIRECTORY_SEPARATOR . 'pdfs';

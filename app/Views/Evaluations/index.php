@@ -48,6 +48,7 @@
                                                 </span>
                                             </div>
                                             <p class="text-xs text-gray-400"><?= date('d/m/Y', strtotime($e1['tanggal_penilaian'])) ?></p>
+                                            <div class="mt-0.5"><?= ack_badge($e1) ?></div>
                                             <div class="flex gap-1 flex-wrap mt-0.5">
                                                 <a href="/evaluations/<?= $e1['id'] ?>"
                                                    class="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg transition">
@@ -77,6 +78,7 @@
                                                 </span>
                                             </div>
                                             <p class="text-xs text-gray-400"><?= date('d/m/Y', strtotime($e2['tanggal_penilaian'])) ?></p>
+                                            <div class="mt-0.5"><?= ack_badge($e2) ?></div>
                                             <div class="flex gap-1 flex-wrap mt-0.5">
                                                 <a href="/evaluations/<?= $e2['id'] ?>"
                                                    class="px-2 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-semibold rounded-lg transition">
@@ -116,7 +118,8 @@
                                                      . ' data-diangkat="' . htmlspecialchars((string)($kep['tanggal_diangkat'] ?? ''), ENT_QUOTES) . '"'
                                                      . ' data-diakhiri="' . htmlspecialchars((string)($kep['tanggal_diakhiri'] ?? ''), ENT_QUOTES) . '"'
                                                      . ' data-lain="' . htmlspecialchars((string)($kep['lain_lain'] ?? ''), ENT_QUOTES) . '"'
-                                                     . ' data-status="' . htmlspecialchars((string)($kep['status_akhir'] ?? ''), ENT_QUOTES) . '"';
+                                                     . ' data-status="' . htmlspecialchars((string)($kep['status_akhir'] ?? ''), ENT_QUOTES) . '"'
+                                                     . ' data-nomor-sk="' . htmlspecialchars((string)($kep['nomor_sk'] ?? ''), ENT_QUOTES) . '"';
                                             ?>
                                             <?php if ($kep): ?>
                                                 <div class="flex items-center gap-1.5 flex-wrap">
@@ -130,6 +133,13 @@
                                                             class="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-semibold rounded-lg transition cursor-pointer">
                                                         Ubah
                                                     </button>
+                                                    <?php if (\App\Models\EvaluationDecisionModel::skSiap($kep)): ?>
+                                                        <a href="/reports/sk/<?= (int)$grp['employee_id'] ?>" target="_blank"
+                                                           class="px-2 py-1 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 text-xs font-semibold rounded-lg transition flex items-center gap-1"
+                                                           title="Surat Keputusan pengangkatan karyawan tetap">
+                                                            <i class="fas fa-file-contract"></i> SK
+                                                        </a>
+                                                    <?php endif; ?>
                                                 </div>
                                             <?php else: ?>
                                                 <button type="button" onclick="openKeputusanModal(this)" <?= $kepData ?>
@@ -156,7 +166,7 @@
     </div>
 
     <!-- Summary Stats -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mt-6">
         <div class="bg-white rounded-xl shadow p-4 border-t-4 border-blue-500">
             <p class="text-sm text-gray-600">Total Penilaian</p>
             <p class="text-3xl font-bold text-gray-900 mt-1"><?= count($evaluations) ?></p>
@@ -182,6 +192,12 @@
                     echo '0';
                 }
                 ?>
+            </p>
+        </div>
+        <div class="bg-white rounded-xl shadow p-4 border-t-4 border-gray-400">
+            <p class="text-sm text-gray-600">Belum Dilihat Member</p>
+            <p class="text-3xl font-bold text-gray-900 mt-1">
+                <?= count(array_filter($evaluations, fn($e) => empty($e['dilihat_at']))) ?>
             </p>
         </div>
     </div>
@@ -259,6 +275,23 @@
                 </p>
             </div>
 
+            <!-- Hanya untuk status Lulus: nomor agenda Surat Keputusan pengangkatan -->
+            <div id="k_sk_box" class="hidden border-t pt-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    Nomor SK pengangkatan <span class="text-red-500">*</span>
+                </label>
+                <div class="flex items-center gap-2">
+                    <input type="text" name="nomor_sk" id="k_nomor_sk" maxlength="20" placeholder="33372"
+                           class="w-32 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm transition">
+                    <span class="text-sm text-gray-500 font-mono" id="k_sk_ekor">/SMJ/RSC-HRD/…</span>
+                </div>
+                <p class="text-xs text-gray-400 mt-2">
+                    Nomor urut sesuai buku agenda perusahaan. Sisanya disusun otomatis dari bulan dan
+                    tahun terbit SK. Begitu tersimpan, Surat Keputusan langsung muncul di dashboard
+                    Team Member — beserta tanggal pengangkatan di atas, jadi tanggal itu wajib diisi.
+                </p>
+            </div>
+
             <div class="flex gap-3 pt-2 border-t">
                 <button type="submit" class="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition flex items-center gap-2">
                     <i class="fas fa-save"></i> Simpan Keputusan
@@ -282,8 +315,12 @@ function openKeputusanModal(btn) {
     document.getElementById('k_diakhiri').value      = d.diakhiri || '';
     document.getElementById('k_lain').value          = d.lain || '';
 
+    document.getElementById('k_nomor_sk').value = d.nomorSk || '';
+
     var radios = document.querySelectorAll('.k_status');
     for (var i = 0; i < radios.length; i++) radios[i].checked = radios[i].value === d.status;
+
+    toggleSkBox();
 
     document.getElementById('keputusanModal').classList.remove('hidden');
     document.body.style.overflow = 'hidden';
@@ -293,6 +330,22 @@ function closeKeputusanModal() {
     document.getElementById('keputusanModal').classList.add('hidden');
     document.body.style.overflow = '';
 }
+
+// Nomor SK hanya berlaku untuk status Lulus — status lain tidak menerbitkan surat.
+function toggleSkBox() {
+    var lulus = document.querySelector('.k_status:checked');
+    lulus = lulus && lulus.value === 'lulus';
+    document.getElementById('k_sk_box').classList.toggle('hidden', !lulus);
+
+    var romawi = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+    var kini   = new Date();
+    document.getElementById('k_sk_ekor').textContent =
+        '/SMJ/RSC-HRD/' + romawi[kini.getMonth() + 1] + '/' + kini.getFullYear();
+}
+
+document.querySelectorAll('.k_status').forEach(function (r) {
+    r.addEventListener('change', toggleSkBox);
+});
 
 document.getElementById('keputusanForm').addEventListener('submit', function (e) {
     var adaBaris = document.getElementById('k_diangkat').value
@@ -308,6 +361,19 @@ document.getElementById('keputusanForm').addEventListener('submit', function (e)
     if (!adaStatus) {
         e.preventDefault();
         showToast('Pilih status akhir masa probation', 'error');
+        return;
+    }
+
+    if (adaStatus.value === 'lulus') {
+        if (!document.getElementById('k_diangkat').value) {
+            e.preventDefault();
+            showToast('Status Lulus butuh tanggal pengangkatan — dipakai di Surat Keputusan', 'error');
+            return;
+        }
+        if (!document.getElementById('k_nomor_sk').value.trim()) {
+            e.preventDefault();
+            showToast('Isi Nomor SK pengangkatan', 'error');
+        }
     }
 });
 

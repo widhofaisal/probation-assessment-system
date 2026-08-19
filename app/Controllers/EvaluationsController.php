@@ -170,6 +170,9 @@ class EvaluationsController extends BaseController
             if (!$employee || $employee['id'] != $evaluation['employee_id']) {
                 return redirect()->back()->with('error', 'Akses ditolak');
             }
+
+            $this->evaluationModel->markViewed($id, (int)$employee['id']);
+            $evaluation = $this->evaluationModel->getWithDetails($id);
         }
 
         $details = $this->evaluationDetailModel->getByEvaluationGrouped($id);
@@ -295,9 +298,31 @@ class EvaluationsController extends BaseController
         $tanggalDiakhiri = $this->request->getPost('tanggal_diakhiri') ?: null;
         $lainLain        = trim((string)$this->request->getPost('lain_lain'));
         $statusAkhir     = (string)$this->request->getPost('status_akhir');
+        $nomorSk         = trim((string)$this->request->getPost('nomor_sk'));
 
         if (!in_array($statusAkhir, EvaluationDecisionModel::STATUS_AKHIR, true)) {
             return redirect()->back()->with('error', 'Status akhir belum dipilih');
+        }
+
+        // Keputusan Lulus melahirkan Surat Keputusan pengangkatan, dan surat itu
+        // berbunyi "Terhitung sejak tanggal ..." dengan nomor agenda di kepalanya
+        // — keduanya karena itu wajib di sini, bukan diisi belakangan. Status lain
+        // tidak menerbitkan surat apa pun, jadi tidak diminta.
+        if ($statusAkhir === 'lulus') {
+            if (!$tanggalDiangkat) {
+                return redirect()->back()->with('error',
+                    'Status Lulus butuh tanggal pengangkatan — tanggal itu yang tercetak di Surat Keputusan');
+            }
+
+            if ($nomorSk === '') {
+                return redirect()->back()->with('error',
+                    'Status Lulus butuh Nomor SK sesuai buku agenda perusahaan');
+            }
+
+            if (!preg_match('/^[A-Za-z0-9.\/-]{1,20}$/', $nomorSk)) {
+                return redirect()->back()->with('error',
+                    'Nomor SK maksimal 20 karakter, hanya huruf, angka, titik, garis miring, dan strip');
+            }
         }
 
         if (!$tanggalDiangkat && !$tanggalDiakhiri && $lainLain === '') {
@@ -313,12 +338,22 @@ class EvaluationsController extends BaseController
         $employeeId = (int)$evaluation['employee_id'];
         $existing   = $this->evaluationDecisionModel->getByEvaluation($id);
 
+        // Tanggal surat dibekukan saat SK pertama kali terbit: nomor dan tanggal
+        // pada surat yang sudah dipegang Team Member tidak boleh bergeser hanya
+        // karena keputusannya disunting lagi di bulan lain.
+        $tanggalSk = $existing['tanggal_sk'] ?? null;
+        if ($statusAkhir === 'lulus' && empty($tanggalSk)) {
+            $tanggalSk = date('Y-m-d');
+        }
+
         $keputusanData = [
             'penilaian_id'     => $id,
             'employee_id'      => $employeeId,
             'tanggal_diangkat' => $tanggalDiangkat,
             'tanggal_diakhiri' => $tanggalDiakhiri,
             'lain_lain'        => $lainLain !== '' ? $lainLain : null,
+            'nomor_sk'         => $nomorSk !== '' ? $nomorSk : null,
+            'tanggal_sk'       => $tanggalSk,
             'status_akhir'     => $statusAkhir,
             'hrd_id'           => session()->get('user_id'),
         ];
@@ -338,6 +373,8 @@ class EvaluationsController extends BaseController
             // Kotak HRD ikut tercetak di PDF, jadi hasil render lama sudah basi.
             PdfCache::forget(PdfCache::keyForEvaluation($id));
             PdfCache::forget(PdfCache::keyForEmployee($employeeId));
+            // Nomor, tanggal, dan nama pada Surat Keputusan ikut berubah.
+            PdfCache::forget(PdfCache::keyForSk($employeeId));
 
             $this->logAudit($existing ? 'UPDATE' : 'CREATE', 'penilaian_keputusan',
                             $keputusanId, $existing, $keputusanData);
@@ -443,6 +480,19 @@ class EvaluationsController extends BaseController
                 'title' => 'Hasil Evaluasi',
                 'user'  => session()->get(),
             ]);
+        }
+
+        // Halaman ini menampilkan nilai total, rincian per aspek, dan catatan
+        // Team Leader secara langsung — jadi membukanya memang sudah berarti
+        // "melihat hasil", dan semua penilaian yang tampil ikut tertandai.
+        $unmarked = $this->evaluationModel
+            ->select('id')
+            ->where('employee_id', $employee['id'])
+            ->where('dilihat_at', null)
+            ->findAll();
+
+        foreach ($unmarked as $row) {
+            $this->evaluationModel->markViewed((int)$row['id'], (int)$employee['id']);
         }
 
         $evaluations = $this->evaluationModel

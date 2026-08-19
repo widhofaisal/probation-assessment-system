@@ -83,6 +83,7 @@ $routes->group('reports', static function ($routes) {
     $routes->get('evaluation/(:num)', 'ReportsController::view/$1');
     $routes->get('pdf/(:num)', 'ReportsController::generatePdf/$1');
     $routes->get('pdf-all/(:num)', 'ReportsController::pdfAll/$1');
+    $routes->get('sk/(:num)', 'ReportsController::sk/$1');
     $routes->get('export-csv', 'ReportsController::exportCsv');
     $routes->get('export-employees-csv', 'ReportsController::exportEmployeesCsv');
 });

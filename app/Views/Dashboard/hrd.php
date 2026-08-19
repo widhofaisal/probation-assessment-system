@@ -44,7 +44,7 @@
 <h2 class="text-2xl font-bold text-gray-900 mb-2">Dashboard Overview</h2>
 <p class="text-gray-600 mb-8">Ringkasan data Team Member probation</p>
 
-<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
     <!-- Total Employees -->
     <div class="bg-white rounded-xl shadow p-6 border-t-4 border-blue-500">
         <div class="flex justify-between items-start">
@@ -96,6 +96,19 @@
             </div>
         </div>
     </div>
+
+    <!-- Belum dilihat Team Member -->
+    <a href="/evaluations" class="bg-white rounded-xl shadow p-6 border-t-4 border-gray-400 hover:shadow-lg transition">
+        <div class="flex justify-between items-start">
+            <div>
+                <p class="text-gray-600 text-sm font-medium">Belum Dilihat Member</p>
+                <p class="text-3xl font-bold text-gray-900 mt-2"><?= $stats['belum_dilihat'] ?></p>
+            </div>
+            <div class="p-3 bg-gray-100 rounded-lg">
+                <i class="fas fa-eye-slash text-gray-500 text-2xl"></i>
+            </div>
+        </div>
+    </a>
 </div>
 
 <!-- Quick Actions -->
@@ -165,6 +178,7 @@
                                 <?php if ($e1): ?>
                                     <div class="flex flex-col gap-1">
                                         <span class="font-bold <?= $e1['nilai_total'] >= 8 ? 'text-green-600' : ($e1['nilai_total'] >= 6 ? 'text-blue-600' : 'text-red-600') ?>"><?= $e1['nilai_total'] ?></span>
+                                        <div><?= ack_badge($e1) ?></div>
                                         <div class="flex gap-1">
                                             <a href="/evaluations/<?= $e1['id'] ?>" class="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs rounded-lg">Detail</a>
                                             <button onclick="pdfDownload('/reports/pdf/<?= $e1['id'] ?>')" class="px-2 py-0.5 bg-red-50 hover:bg-red-100 text-red-700 text-xs rounded-lg cursor-pointer">PDF</button>
@@ -179,6 +193,7 @@
                                 <?php if ($e2): ?>
                                     <div class="flex flex-col gap-1">
                                         <span class="font-bold <?= $e2['nilai_total'] >= 8 ? 'text-green-600' : ($e2['nilai_total'] >= 6 ? 'text-blue-600' : 'text-red-600') ?>"><?= $e2['nilai_total'] ?></span>
+                                        <div><?= ack_badge($e2) ?></div>
                                         <div class="flex gap-1">
                                             <a href="/evaluations/<?= $e2['id'] ?>" class="px-2 py-0.5 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs rounded-lg">Detail</a>
                                             <button onclick="pdfDownload('/reports/pdf/<?= $e2['id'] ?>')" class="px-2 py-0.5 bg-red-50 hover:bg-red-100 text-red-700 text-xs rounded-lg cursor-pointer">PDF</button>

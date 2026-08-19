@@ -39,6 +39,8 @@
                                         'DELETE' => 'bg-red-100 text-red-700',
                                         'LOGIN' => 'bg-purple-100 text-purple-700',
                                         'LOGOUT' => 'bg-gray-100 text-gray-700',
+                                        'VIEW_RESULT' => 'bg-sky-100 text-sky-700',
+                                        'DOWNLOAD_PDF' => 'bg-emerald-100 text-emerald-700',
                                         default => 'bg-gray-100 text-gray-700'
                                     };
                                     ?>

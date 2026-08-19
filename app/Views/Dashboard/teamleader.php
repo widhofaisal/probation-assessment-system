@@ -99,6 +99,7 @@
                                             <?= htmlspecialchars($e1['nilai_total']) ?>
                                         </span>
                                         <p class="text-xs text-gray-400"><?= date('d/m/Y', strtotime($e1['tanggal_penilaian'])) ?></p>
+                                        <div><?= ack_badge($e1) ?></div>
                                         <div class="flex gap-1 flex-wrap">
                                             <a href="/evaluations/<?= $e1['id'] ?>"
                                                class="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg transition">
@@ -122,6 +123,7 @@
                                             <?= htmlspecialchars($e2['nilai_total']) ?>
                                         </span>
                                         <p class="text-xs text-gray-400"><?= date('d/m/Y', strtotime($e2['tanggal_penilaian'])) ?></p>
+                                        <div><?= ack_badge($e2) ?></div>
                                         <div class="flex gap-1 flex-wrap">
                                             <a href="/evaluations/<?= $e2['id'] ?>"
                                                class="px-2 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-semibold rounded-lg transition">

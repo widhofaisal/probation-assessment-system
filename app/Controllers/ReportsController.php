@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Libraries\KopSurat;
 use App\Libraries\PdfCache;
+use App\Libraries\SuratKeputusan;
 use App\Models\EvaluationModel;
 use App\Models\EvaluationDecisionModel;
 use App\Models\EvaluationDetailModel;
@@ -38,6 +39,19 @@ class ReportsController extends BaseController
         $role = session()->get('role');
         if ($role === 'team-leader' && $evaluation['team_leader_id'] != session()->get('user_id')) {
             return redirect()->back()->with('error', 'Akses ditolak');
+        }
+
+        // Aturan kepemilikan yang sama dengan generatePdf(): Team Member hanya
+        // boleh melihat laporannya sendiri. Tanpa ini, ID di URL bisa ditukar
+        // untuk membaca penilaian rekannya.
+        if ($role === 'probationary-employee') {
+            $self = $this->employeeModel->findByNik(session()->get('nik'));
+            if (!$self || (int)$evaluation['employee_id'] !== (int)$self['id']) {
+                return redirect()->back()->with('error', 'Akses ditolak');
+            }
+
+            $this->evaluationModel->markViewed($id, (int)$self['id']);
+            $evaluation = $this->evaluationModel->getWithDetails($id);
         }
 
         $details        = $this->evaluationDetailModel->getByEvaluationGrouped($id);
@@ -80,6 +94,10 @@ class ReportsController extends BaseController
             if (!$self || (int)$evaluation['employee_id'] !== (int)$self['id']) {
                 return redirect()->back()->with('error', 'Akses ditolak');
             }
+
+            // Ditandai sebelum PDF-nya dibangun: pembuatan file bisa lambat atau
+            // gagal, tapi permintaannya sendiri sudah cukup jadi bukti unduh.
+            $this->evaluationModel->markDownloaded($id, (int)$self['id']);
         }
 
         $nomor    = (int)($evaluation['nomor_penilaian'] ?? 1);
@@ -326,6 +344,7 @@ class ReportsController extends BaseController
         $L[] = "    SetScoreCell \$t6 2 2 '{$avgScore}'";
         $L = array_merge($L, $this->buildVerifikasiLines($eval, '$off', $ps));
         $L = array_merge($L, $this->buildKeputusanLines($nomor === 2 ? $keputusan : null, $ps));
+        $L = array_merge($L, $this->removeSignatureTableLines());
         $L[] = '';
         // Export only the relevant page (ke-1 → page 1, ke-2 → page 2)
         $L[] = "    \$doc.ExportAsFixedFormat('{$pdf}', 17, \$false, 0, 3, {$nomor}, {$nomor})";
@@ -401,6 +420,16 @@ class ReportsController extends BaseController
         if ($raw2) {
             $eval2 = $this->evaluationModel->getWithDetails($raw2['id']);
             $eval2['details'] = $this->evaluationDetailModel->where('penilaian_id', $raw2['id'])->findAll();
+        }
+
+        // Dokumen gabungan memuat kedua lembar sekaligus, jadi keduanya tercatat
+        // terunduh — bukan hanya lembar pertama. $employeeId di sini sudah
+        // dipastikan milik member yang sedang login pada pemeriksaan di atas.
+        if ($role === 'probationary-employee') {
+            $this->evaluationModel->markDownloaded((int)$raw1['id'], $employeeId);
+            if ($raw2) {
+                $this->evaluationModel->markDownloaded((int)$raw2['id'], $employeeId);
+            }
         }
 
         // Keputusan HRD menempel pada lembar ke-2 — belum ada lembar ke-2 berarti
@@ -516,6 +545,7 @@ class ReportsController extends BaseController
         // Kotak HRD berdiri sendiri di bawah lembar ke-2, bukan bagian dari tabel
         // per-lembar, jadi diisi sekali di sini — bukan di dalam buildSheetLines().
         $L = array_merge($L, $this->buildKeputusanLines($eval2 ? $keputusan : null, $ps));
+        $L = array_merge($L, $this->removeSignatureTableLines());
 
         $L[] = '';
         $L[] = "    \$doc.ExportAsFixedFormat('{$pdf}', 17)";
@@ -605,13 +635,17 @@ class ReportsController extends BaseController
      * The template already carries an empty paragraph directly under the
      * signature table (table 8 of each sheet), so the text is written into
      * that paragraph rather than inserted as a new one — adding a line would
-     * reflow the document and break the per-page export ranges.
+     * reflow the document and break the per-page export ranges. The table
+     * itself is dropped later by removeSignatureTableLines(); the paragraph
+     * holding this note sits outside it and stays.
      *
-     * The note is set to 8pt so even a long name stays on a single line; the
-     * 468pt text column fits roughly 130 characters at that size. That is a
-     * point smaller than the 9pt paragraph it lands in, which shortens page 1
-     * just enough for sheet 2 to creep up onto it — pinVerifikasiPageLines()
-     * holds sheet 2 down and must be emitted alongside this.
+     * The note is set to 8pt: a point smaller than the 9pt paragraph it lands
+     * in, which shortens page 1 just enough for sheet 2 to creep up onto it —
+     * pinVerifikasiPageLines() holds sheet 2 down and must be emitted
+     * alongside this. The 468pt text column fits roughly 130 characters at
+     * that size, and naming both parties can push past that; a second line is
+     * fine here — the space freed by removeSignatureTableLines() absorbs it
+     * and each sheet still exports as one page.
      *
      * $off is emitted verbatim into the script: buildWordComScript() passes the
      * PowerShell variable '$off', buildSheetLines() passes a literal offset.
@@ -622,7 +656,7 @@ class ReportsController extends BaseController
 
         return [
             '',
-            '    # CATATAN VERIFIKASI (paragraf kosong di bawah tabel tanda tangan)',
+            '    # CATATAN VERIFIKASI (paragraf kosong di bawah area tanda tangan)',
             '    try {',
             "        \$sig  = \$doc.Tables.Item(8 + {$off})",
             '        $vrf  = $doc.Range($sig.Range.End, $sig.Range.End)',
@@ -727,24 +761,69 @@ class ReportsController extends BaseController
     }
 
     // ---------------------------------------------------------------
+    // AREA TANDA TANGAN
+    // ---------------------------------------------------------------
+
+    /**
+     * PowerShell lines that drop the signature block ("PENILAI / ATASAN
+     * LANGSUNG", "MENGETAHUI / MENYETUJUI", "YANG DINILAI") from both sheets of
+     * the Word template. The forms are verified in the application itself, so
+     * the hand-signed block no longer belongs on the printout — the DomPDF
+     * renderer omits it too.
+     *
+     * The template is left untouched on disk; the tables are removed from the
+     * in-memory copy each render, which keeps the two renderers in step without
+     * having to re-author the binary .doc.
+     *
+     * Two ordering rules matter, and both are why these lines are emitted last:
+     *   - buildVerifikasiLines() anchors the footnote to the end of table 8/16,
+     *     so the tables must still exist while it runs. The footnote lives in
+     *     the paragraph *after* the table and survives the delete.
+     *   - Deleting a table renumbers every table behind it, so sheet 2's block
+     *     (16) goes first and sheet 1's (8) second. Any code addressing tables
+     *     by index must already have run.
+     */
+    private function removeSignatureTableLines(): array
+    {
+        $L = ['', '    # AREA TANDA TANGAN dihapus (tabel 8 tiap lembar, dari belakang)'];
+        foreach ([16, 8] as $index) {
+            $L[] = '    try {';
+            $L[] = "        \$doc.Tables.Item({$index}).Delete()";
+            $L[] = '    } catch {}';
+        }
+
+        return $L;
+    }
+
+    // ---------------------------------------------------------------
     // CATATAN VERIFIKASI
     // ---------------------------------------------------------------
 
     /**
-     * Footnote printed at the bottom of every evaluation sheet, below the
-     * signature block. Both renderers (Word COM and DomPDF) call this so the
-     * two stay word for word identical.
+     * Footnote printed at the bottom of every evaluation sheet. Both renderers
+     * (Word COM and DomPDF) call this so the two stay word for word identical.
+     *
+     * Both parties are named: the Penilai is penilaian.team_leader_id — the
+     * Team Leader who actually scored this sheet, which getWithDetails() joins
+     * in as team_leader_nama. That is deliberately not employees.team_leader_id
+     * (the Team Member's owner today), so a sheet keeps naming its original
+     * evaluator after the Team Member is handed to someone else.
+     *
+     * A name that is missing drops only its own bracket, never the sentence.
      *
      * The date is the sheet's own tanggal_penilaian — the same date already
      * printed in DATA KARYAWAN — so each period carries its own date.
      */
     private function verifikasiNote(array $evaluation): string
     {
-        $nama = trim((string)($evaluation['nama'] ?? ''));
-        $tgl  = $this->tanggalIndo($evaluation['tanggal_penilaian'] ?? null);
+        $penilai = trim((string)($evaluation['team_leader_nama'] ?? ''));
+        $dinilai = trim((string)($evaluation['nama'] ?? ''));
+        $tgl     = $this->tanggalIndo($evaluation['tanggal_penilaian'] ?? null);
 
-        $note = '* Telah diverifikasi oleh Penilai dan Yang Dinilai'
-              . ($nama !== '' ? ' (' . $nama . ')' : '');
+        $kurung = static fn(string $v): string => $v !== '' ? ' (' . $v . ')' : '';
+
+        $note = '* Telah diverifikasi oleh Penilai' . $kurung($penilai)
+              . ' dan Yang Dinilai' . $kurung($dinilai);
 
         return $tgl !== '' ? $note . ' pada hari ' . $tgl : $note;
     }
@@ -869,11 +948,7 @@ table.nm td { border:1px solid #000; padding:2px 4px; font-size:7.5pt; }
 /* Baris yang sudah diisi HRD boleh melebar mengikuti teksnya. */
 .hrd-line-isi { width:auto; min-width:148px; padding:0 3px; }
 
-/* SIGNATURES */
-table.sg { width:100%; border-collapse:collapse; margin-top:8px; }
-table.sg td { text-align:center; font-size:7.5pt; width:33%; padding:0 3px; vertical-align:top; border:none; }
-
-/* CATATAN VERIFIKASI — closes each sheet, under the signature block */
+/* CATATAN VERIFIKASI — closes each sheet */
 p.vrf { font-size:7.5pt; font-style:italic; margin:6px 0 0; }
 
 /* PEDOMAN */
@@ -991,7 +1066,6 @@ p.vrf { font-size:7.5pt; font-style:italic; margin:6px 0 0; }
         // change it here and in the .doc together if real numbering is wanted.
         $halaman = '01/03';
         $title   = 'PENILAIAN ' . $nomorSheet . ' MASA PERCOBAAN TEAM MEMBER';
-        $dots    = '&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;&#x2026;';
 
         ob_start(); ?>
 <!-- FORM HEADER — cell structure matches the Word template exactly -->
@@ -1137,33 +1211,215 @@ p.vrf { font-size:7.5pt; font-style:italic; margin:6px 0 0; }
 </div>
 <?php endif; ?>
 
-<!-- SIGNATURES -->
-<table class="sg">
-  <tr>
-    <td><strong>PENILAI / ATASAN LANGSUNG</strong></td>
-    <td><strong>MENGETAHUI / MENYETUJUI</strong></td>
-    <td><strong>YANG DINILAI</strong></td>
-  </tr>
-  <tr>
-    <td>
-      Date :<br><br><br><br><br>
-      (<?= $dots ?>)
-    </td>
-    <td>
-      Date :<br><br><br><br><br>
-      (<?= $dots ?>)
-    </td>
-    <td>
-      Date :<br><br><br><br><br>
-      (<?= $dots ?>)
-    </td>
-  </tr>
-</table>
-
 <!-- CATATAN VERIFIKASI -->
 <p class="vrf"><?= $h($this->verifikasiNote($evaluation)) ?></p>
 <?php
         return ob_get_clean();
+    }
+
+    // ---------------------------------------------------------------
+    // SURAT KEPUTUSAN PENGANGKATAN
+    // ---------------------------------------------------------------
+
+    /**
+     * Surat Keputusan pengangkatan karyawan tetap, sebagai PDF.
+     *
+     * Terbit sendiri begitu HRD memutuskan Lulus dan mengisi nomor SK serta
+     * tanggal pengangkatan — tidak ada tombol "buat SK" terpisah. Selama salah
+     * satunya belum ada, surat ini memang belum ada wujudnya, jadi tautannya
+     * pun tidak muncul di dashboard Team Member.
+     *
+     * Jalur rendernya sama dengan form penilaian: Word COM memakai .docx
+     * aslinya bila tersedia (Windows), DomPDF menyusun tiruannya bila tidak
+     * (host Linux). Keduanya mengambil isi dari SuratKeputusan::data().
+     */
+    public function sk(int $employeeId)
+    {
+        $role = session()->get('role');
+        if (!in_array($role, ['hrd', 'team-leader', 'probationary-employee'], true)) {
+            return redirect()->to('/auth/login');
+        }
+
+        $employee = $this->employeeModel->find($employeeId);
+        if (!$employee) {
+            return redirect()->back()->with('error', 'Team Member tidak ditemukan');
+        }
+
+        if (!$this->bolehLihatSk($role, $employee, $employeeId)) {
+            return redirect()->back()->with('error', 'Akses ditolak');
+        }
+
+        $keputusan = $this->evaluationDecisionModel->getLulusByEmployee($employeeId);
+        if (!EvaluationDecisionModel::skSiap($keputusan)) {
+            return redirect()->back()->with('error',
+                'Surat Keputusan belum tersedia — HRD belum memutuskan Lulus atau belum mengisi nomor SK');
+        }
+
+        $data     = SuratKeputusan::data($employee, $keputusan);
+        $filename = SuratKeputusan::namaBerkas($employee);
+        $key      = PdfCache::keyForSk($employeeId);
+
+        $wordPath = PdfCache::path($key, PdfCache::ENGINE_WORD);
+        if (is_file($wordPath)) {
+            return $this->servePdf($wordPath, $filename);
+        }
+
+        // --- Utama: Word COM (hanya Windows) ---
+        if ($this->isWindows()) {
+            $pdfPath = $this->generateSkViaWordCom($data, $employeeId);
+            if ($pdfPath && file_exists($pdfPath)) {
+                $cached = PdfCache::adopt($key, PdfCache::ENGINE_WORD, $pdfPath);
+
+                return $this->servePdf($cached, $filename);
+            }
+        }
+
+        // --- Cadangan: DomPDF ---
+        $fallbackPath = PdfCache::path($key, PdfCache::ENGINE_FALLBACK);
+        if (is_file($fallbackPath)) {
+            return $this->servePdf($fallbackPath, $filename);
+        }
+
+        $cached = PdfCache::put($key, PdfCache::ENGINE_FALLBACK,
+                                $this->renderDompdf(SuratKeputusan::html($data)));
+
+        return $this->servePdf($cached, $filename);
+    }
+
+    /**
+     * Siapa yang boleh membuka SK milik seorang Team Member.
+     *
+     * Mengikuti aturan pdfAll(): HRD semua, Team Member hanya dirinya sendiri,
+     * dan Team Leader baik yang memegang Team Member itu sekarang maupun yang
+     * dulu menilainya — karena kepemilikan bisa berpindah setelah penilaian.
+     */
+    private function bolehLihatSk(string $role, array $employee, int $employeeId): bool
+    {
+        if ($role === 'hrd') {
+            return true;
+        }
+
+        if ($role === 'probationary-employee') {
+            $self = $this->employeeModel->findByNik(session()->get('nik'));
+
+            return $self && (int) $self['id'] === $employeeId;
+        }
+
+        $userId = (int) session()->get('user_id');
+
+        return (int) ($employee['team_leader_id'] ?? 0) === $userId
+            || $this->evaluationModel->where('employee_id', $employeeId)
+                                     ->where('team_leader_id', $userId)
+                                     ->countAllResults() > 0;
+    }
+
+    /**
+     * Isi template SK lalu ekspor ke PDF lewat Word. Mengembalikan path PDF-nya,
+     * atau null bila gagal — pemanggil lalu jatuh ke DomPDF.
+     */
+    private function generateSkViaWordCom(array $data, int $employeeId): ?string
+    {
+        $templatePath = ROOTPATH . 'template SK team member.docx';
+        if (!file_exists($templatePath)) {
+            log_message('error', 'SK: Word template not found at ' . $templatePath);
+
+            return null;
+        }
+
+        $tmpDir = rtrim(WRITEPATH, '/\\') . DIRECTORY_SEPARATOR . 'tmp';
+        if (!is_dir($tmpDir)) {
+            mkdir($tmpDir, 0755, true);
+        }
+
+        $uid     = 'sk_' . $employeeId . '_' . uniqid();
+        $pdfPath = $tmpDir . DIRECTORY_SEPARATOR . $uid . '.pdf';
+        $psPath  = $tmpDir . DIRECTORY_SEPARATOR . $uid . '.ps1';
+
+        file_put_contents($psPath, "\xEF\xBB\xBF" . $this->buildSkWordComScript($data, $templatePath, $pdfPath));
+
+        $cmd = 'powershell -NonInteractive -ExecutionPolicy Bypass -File "' . $psPath . '" 2>&1';
+        exec($cmd, $output, $exitCode);
+
+        @unlink($psPath);
+
+        if ($exitCode !== 0 || !file_exists($pdfPath)) {
+            log_message('error', 'SK Word COM failed (exit=' . $exitCode . '): ' . implode(' | ', $output ?? []));
+
+            return null;
+        }
+
+        return $pdfPath;
+    }
+
+    /**
+     * Skrip PowerShell yang membuka template SK, mengganti isi contohnya, lalu
+     * mengekspor PDF.
+     *
+     * Penggantian lewat Find & Replace Word, bukan bedah XML: teks pada template
+     * terpecah-pecah menjadi banyak run ("Muhammad " + "Iqbal"), dan Find Word
+     * menembus pemisah itu sedangkan pencarian teks biasa tidak. Wildcard
+     * dimatikan supaya isian karyawan diperlakukan sebagai teks apa adanya.
+     *
+     * Dokumen dibuka non-read-only karena diubah, tapi ditutup tanpa disimpan —
+     * templatenya harus tetap utuh untuk cetakan berikutnya.
+     */
+    private function buildSkWordComScript(array $data, string $templatePath, string $pdfPath): string
+    {
+        $ps  = static fn($v) => str_replace("'", "''", (string) $v);
+        $tpl = $ps(str_replace('/', '\\', $templatePath));
+        $pdf = $ps(str_replace('/', '\\', $pdfPath));
+
+        $L   = [];
+        $L[] = '$ErrorActionPreference = "Continue"';
+        $L[] = '$word = $null; $doc = $null';
+        $L[] = 'try {';
+        $L[] = '    $word = New-Object -ComObject Word.Application';
+        $L[] = '    $word.Visible = $false';
+        $L[] = '    $word.DisplayAlerts = 0';
+        $L[] = "    \$doc = \$word.Documents.Open('{$tpl}', \$false, \$false)";
+        $L[] = '';
+        $L[] = '    function GantiTeks($cari, $ganti) {';
+        $L[] = '        try {';
+        $L[] = '            $f = $script:doc.Content.Find';
+        $L[] = '            $f.ClearFormatting()';
+        $L[] = '            $f.Replacement.ClearFormatting()';
+        $L[] = '            # Forward, Wrap=1 (wdFindContinue), Replace=2 (wdReplaceAll)';
+        $L[] = '            $f.Execute($cari, $true, $false, $false, $false, $false, $true, 1, $false, $ganti, 2) | Out-Null';
+        $L[] = '        } catch {}';
+        $L[] = '    }';
+        $L[] = '';
+        $L[] = '    # ISI SURAT — dua tahap lewat penanda @@...@@, lihat SuratKeputusan::wordReplacements()';
+        foreach (SuratKeputusan::wordReplacements($data) as [$cari, $ganti]) {
+            $L[] = "    GantiTeks '{$ps($cari)}' '{$ps($ganti)}'";
+        }
+        $L[] = '';
+        $L[] = '    # Kolom isi pada tabel MEMUTUSKAN hanya memakai 328pt dari 482pt yang';
+        $L[] = '    # tersedia. Tanggal pengangkatan yang lebih panjang dari contohnya bikin';
+        $L[] = '    # kalimat "mengangkat karyawan" patah; sisa ruangnya dipakai supaya tidak.';
+        $L[] = '    try { $doc.Tables.Item(2).Columns.Item(3).Width = 370 } catch {}';
+        $L[] = '';
+        $L[] = '    # Kolom Departemen/Jabatan pada template disetel sangat sempit karena';
+        $L[] = '    # contohnya cuma "IT"; departemen sungguhan lebih panjang dan barisnya';
+        $L[] = '    # patah di tengah label. Dilebarkan sampai margin kanan.';
+        $L[] = '    try {';
+        $L[] = '        foreach ($p in $doc.Paragraphs) {';
+        $L[] = '            if ($p.Range.Text -like "Departemen*") { $p.RightIndent = 0 }';
+        $L[] = '        }';
+        $L[] = '    } catch {}';
+        $L[] = '';
+        $L[] = "    \$doc.ExportAsFixedFormat('{$pdf}', 17)";
+        $L[] = '    $doc.Close($false)';
+        $L[] = '    $word.Quit()';
+        $L[] = '    [System.Runtime.InteropServices.Marshal]::ReleaseComObject($word) | Out-Null';
+        $L[] = '    Write-Host "PDF_OK"';
+        $L[] = '} catch {';
+        $L[] = '    Write-Error $_.Exception.Message';
+        $L[] = '    try { if ($doc)  { $doc.Close($false) }  } catch {}';
+        $L[] = '    try { if ($word) { $word.Quit() }        } catch {}';
+        $L[] = '    exit 1';
+        $L[] = '}';
+
+        return implode("\r\n", $L);
     }
 
     // ---------------------------------------------------------------

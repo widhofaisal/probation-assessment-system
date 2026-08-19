@@ -42,6 +42,39 @@
 <h2 class="text-2xl font-bold text-gray-900 mb-2">Dashboard Overview</h2>
 <p class="text-gray-600 mb-8">Informasi masa probasi Anda</p>
 
+<?php if (!empty($sk)): ?>
+    <!-- Surat Keputusan — terbit sendiri setelah HRD memutuskan Lulus -->
+    <div class="mb-8 bg-white rounded-xl shadow border-l-4 border-green-500 p-6">
+        <div class="flex items-start justify-between flex-wrap gap-4">
+            <div class="flex items-start gap-4">
+                <div class="w-12 h-12 rounded-xl bg-green-50 text-green-600 flex items-center justify-center shrink-0">
+                    <i class="fas fa-file-contract text-xl"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-gray-900">Surat Keputusan Pengangkatan Karyawan Tetap</h3>
+                    <p class="text-sm text-gray-600 mt-0.5">
+                        Selamat — masa probasi Anda dinyatakan <span class="font-semibold text-green-700">Lulus</span>.
+                    </p>
+                    <div class="flex flex-wrap gap-x-6 gap-y-1 mt-3 text-sm">
+                        <div>
+                            <span class="text-gray-500">Nomor</span>
+                            <span class="font-semibold text-gray-900 ml-1"><?= htmlspecialchars(\App\Models\EvaluationDecisionModel::nomorSkLengkap($sk)) ?></span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">Diangkat terhitung</span>
+                            <span class="font-semibold text-gray-900 ml-1"><?= htmlspecialchars(\App\Libraries\SuratKeputusan::tanggalPanjang($sk['tanggal_diangkat'])) ?></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <a href="/reports/sk/<?= (int)$employee['id'] ?>" target="_blank"
+               class="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition flex items-center gap-2">
+                <i class="fas fa-download"></i> Lihat / Unduh SK
+            </a>
+        </div>
+    </div>
+<?php endif; ?>
+
 <!-- Employee Status Card -->
 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
     <div class="bg-white rounded-xl shadow p-6">
@@ -102,6 +135,7 @@
                         <th class="px-6 py-3 text-left text-sm font-semibold">Tanggal Penilaian</th>
                         <th class="px-6 py-3 text-left text-sm font-semibold">Nilai</th>
                         <th class="px-6 py-3 text-left text-sm font-semibold">Team Leader</th>
+                        <th class="px-6 py-3 text-left text-sm font-semibold">Tanda Terima</th>
                         <th class="px-6 py-3 text-left text-sm font-semibold">Aksi</th>
                     </tr>
                 </thead>
@@ -111,6 +145,15 @@
                             <td class="px-6 py-4"><?= date('d/m/Y H:i', strtotime($eval['tanggal_penilaian'])) ?></td>
                             <td class="px-6 py-4 font-semibold text-lg"><?= htmlspecialchars($eval['nilai_total']) ?></td>
                             <td class="px-6 py-4"><?= htmlspecialchars($eval['team_leader_nama']) ?></td>
+                            <td class="px-6 py-4">
+                                <?php if (empty($eval['dilihat_at'])): ?>
+                                    <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-full text-xs font-medium">
+                                        <i class="fas fa-circle text-[8px]"></i>Hasil baru — belum Anda buka
+                                    </span>
+                                <?php else: ?>
+                                    <?= ack_badge_member($eval) ?>
+                                <?php endif; ?>
+                            </td>
                             <td class="px-6 py-4">
                                 <a href="/reports/evaluation/<?= $eval['id'] ?>" class="text-blue-600 hover:text-blue-700 font-medium">Lihat Detail</a>
                             </td>

@@ -100,9 +100,14 @@
                         <i class="fas fa-chart-line text-blue-600"></i>
                         <span class="font-medium text-gray-700">Dashboard</span>
                     </a>
+                    <?php $belumDilihat = ack_unviewed_count(); ?>
                     <a href="/evaluations/my" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-100 transition">
                         <i class="fas fa-file-alt text-blue-600"></i>
                         <span class="font-medium text-gray-700">Hasil Evaluasi</span>
+                        <?php if ($belumDilihat > 0): ?>
+                            <span class="ml-auto min-w-[20px] h-5 px-1.5 bg-red-600 text-white text-xs font-bold rounded-full flex items-center justify-center"
+                                  title="<?= $belumDilihat ?> hasil penilaian belum Anda buka"><?= $belumDilihat ?></span>
+                        <?php endif; ?>
                     </a>
                 <?php endif; ?>
             </div>
