@@ -100,8 +100,9 @@ $denyPatterns = @(
     '\.backup$'
     '\.sql\.gz$'
 
-    # Daftar akun demo berisi password plaintext. Digantikan DEMO-ACCOUNTS.md
-    # yang isinya sama tapi jelas menandai statusnya sebagai akun demo.
+    # Dulu ada berkas 'user' di root berisi daftar password polos. Sudah dihapus
+    # dan digantikan DEMO-ACCOUNTS.md, tapi aturannya dipertahankan supaya berkas
+    # serupa tidak ikut terkirim kalau suatu saat dibuat lagi.
     '^user$'
 
     # File sesi runtime. Isinya user_id dan role pengguna yang sedang login,

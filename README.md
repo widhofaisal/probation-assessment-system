@@ -95,7 +95,19 @@ Codebase ini **plug-n-play** — file yang sama bisa jalan di lokal (`php spark 
 
 ### Langkah Deploy ke InfinityFree
 
-**1. Upload file via FileZilla** ke `htdocs/`:
+**1. Siapkan `vendor/` tanpa dev dependencies**
+
+```bash
+composer install --no-dev --optimize-autoloader
+```
+
+Yang diunggah adalah folder `vendor/` apa adanya. Kalau sebelumnya Anda
+menjalankan `composer install` biasa untuk menjalankan tes, folder itu berisi
+PHPUnit dan Faker — sekitar 18 MB berkas yang tidak dipakai di server dan
+memperlambat unggahan. Setelah selesai deploy, jalankan `composer install`
+lagi untuk mengembalikan perkakas tes.
+
+**2. Upload file via FileZilla** ke `htdocs/`:
 
 ```
 htdocs/
@@ -105,32 +117,29 @@ htdocs/
 ├── index.php           ← upload dari ./public/index.php
 ├── .htaccess           ← upload dari ./public/.htaccess
 ├── favicon.ico, favicon.svg, robots.txt
-└── env.local.php       ← buat di langkah 2
+└── env.local.php       ← buat di langkah 3
 ```
 
 > InfinityFree memberlakukan `open_basedir` yang membatasi PHP hanya bisa baca dari `htdocs/`, sehingga `app/`, `vendor/`, `writable/` **harus** berada di dalam `htdocs/`.
 
-**2. Buat `env.local.php` di `htdocs/`** — dua cara:
+**3. Buat `env.local.php` di `htdocs/`**
 
-- **Manual**: copy dari [env.local.php.example](env.local.php.example), edit kredensial database & `app.baseURL`, upload sebagai `htdocs/env.local.php`.
-- **Otomatis**: edit nilai konstanta di [public/setup_env.php](public/setup_env.php) (database, baseURL, dst.) sebelum upload, lalu akses sekali di browser:
-  ```
-  https://your-domain.infinityfreeapp.com/setup_env.php?key=rahasia123
-  ```
-  File `env.local.php` akan ter-generate otomatis di `htdocs/`. **Hapus `setup_env.php` setelah selesai.**
+Salin [env.local.php.example](env.local.php.example), isi kredensial basis data
+dan `app.baseURL`, lalu unggah sebagai `htdocs/env.local.php`.
 
-**3. Import database** lewat phpMyAdmin (panel InfinityFree): import `database_dump.sql`.
+Pastikan `encryption.key` diisi nilai acak milik instalasi ini sendiri. Nilainya
+bisa dibuat dengan `php spark key:generate` di komputer lokal, lalu disalin.
 
-**4. Verifikasi (opsional)** — akses script debug, lalu **hapus** setelah dipakai:
-- `https://your-domain/debug_boot.php?key=rahasia123` — cek struktur folder & autoload
-- `https://your-domain/check_writable.php?key=rahasia123` — cek izin tulis di `writable/`
+> Jangan membuat script pembuat konfigurasi yang bisa dipanggil lewat URL.
+> Script semacam itu menulis kredensial basis data ke server dan biasanya hanya
+> dijaga kata kunci di query string — kalau lupa dihapus setelah dipakai, siapa
+> pun yang menebak kata kuncinya bisa menimpa konfigurasi Anda.
 
-**5. Hapus file sensitif dari server** setelah deploy stabil:
-- `setup_env.php`
-- `debug_boot.php`
-- `check_writable.php`
+**4. Import database** lewat phpMyAdmin (panel InfinityFree): import `database_dump.sql`.
 
-> ⚠️ **Ganti `SETUP_KEY`** (`rahasia123`) di ketiga script di atas dengan string acak yang kuat sebelum upload.
+**5. Pastikan tidak ada berkas bantu yang tertinggal di server.** Berkas
+sementara untuk setup atau debug harus dihapus begitu selesai dipakai — semuanya
+berada di dalam web root dan bisa diakses siapa saja.
 
 ### Keamanan
 
