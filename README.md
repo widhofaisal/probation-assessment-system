@@ -114,67 +114,24 @@ Akses di: `http://localhost:8080`
 
 ---
 
-## Deployment ke Hosting (InfinityFree)
+## Deployment ke Server
 
-Codebase ini **plug-n-play** — file yang sama bisa jalan di lokal (`php spark serve`) maupun di shared hosting seperti InfinityFree, tanpa perlu mengubah `index.php`.
+**Panduan lengkapnya ada di [DEPLOYMENT.md](DEPLOYMENT.md)** — delapan langkah
+dari memeriksa kesiapan server sampai login pertama, berikut daftar periksa
+keamanan dan penanganan masalah yang sering muncul.
 
-### Perbedaan Layout
+Ringkasnya, aplikasi ini mendukung dua susunan folder dan `public/index.php`
+mengenali keduanya sendiri tanpa perlu diubah:
 
-| | Lokal | InfinityFree |
+| | Susunan A (disarankan) | Susunan B |
 |---|---|---|
-| Lokasi `app/`, `vendor/`, `writable/` | sejajar dengan `public/` | **di dalam** `htdocs/` (= `public/`) |
-| Konfigurasi env | `.env` di project root (CI4 DotEnv) | `env.local.php` di `htdocs/` (inject `$_ENV` langsung — `putenv()` di-disable) |
-| `RewriteBase` | tidak relevan (spark serve abaikan `.htaccess`) | `/` (sudah disetel) |
+| Kapan dipakai | document root bisa diarahkan ke subfolder | hosting mengunci web root, atau PHP dibatasi `open_basedir` |
+| Letak `app/`, `vendor/`, `writable/` | sejajar dengan `public/`, di luar web root | di dalam folder publik |
+| Konfigurasi | `.env` di akar proyek | `env.local.php` sejajar `index.php`, dipakai bila `putenv()` dimatikan |
 
-`public/index.php` melakukan **auto-detect** layout dan mekanisme env, jadi cukup pilih salah satu pola di atas.
-
-### Langkah Deploy ke InfinityFree
-
-**1. Siapkan `vendor/` tanpa dev dependencies**
-
-```bash
-composer install --no-dev --optimize-autoloader
-```
-
-Yang diunggah adalah folder `vendor/` apa adanya. Kalau sebelumnya Anda
-menjalankan `composer install` biasa untuk menjalankan tes, folder itu berisi
-PHPUnit dan Faker — sekitar 18 MB berkas yang tidak dipakai di server dan
-memperlambat unggahan. Setelah selesai deploy, jalankan `composer install`
-lagi untuk mengembalikan perkakas tes.
-
-**2. Upload file via FileZilla** ke `htdocs/`:
-
-```
-htdocs/
-├── app/                ← upload dari ./app/
-├── vendor/             ← upload dari ./vendor/
-├── writable/           ← upload dari ./writable/
-├── index.php           ← upload dari ./public/index.php
-├── .htaccess           ← upload dari ./public/.htaccess
-├── favicon.ico, favicon.svg, robots.txt
-└── env.local.php       ← buat di langkah 3
-```
-
-> InfinityFree memberlakukan `open_basedir` yang membatasi PHP hanya bisa baca dari `htdocs/`, sehingga `app/`, `vendor/`, `writable/` **harus** berada di dalam `htdocs/`.
-
-**3. Buat `env.local.php` di `htdocs/`**
-
-Salin [env.local.php.example](env.local.php.example), isi kredensial basis data
-dan `app.baseURL`, lalu unggah sebagai `htdocs/env.local.php`.
-
-Pastikan `encryption.key` diisi nilai acak milik instalasi ini sendiri. Nilainya
-bisa dibuat dengan `php spark key:generate` di komputer lokal, lalu disalin.
-
-> Jangan membuat script pembuat konfigurasi yang bisa dipanggil lewat URL.
-> Script semacam itu menulis kredensial basis data ke server dan biasanya hanya
-> dijaga kata kunci di query string — kalau lupa dihapus setelah dipakai, siapa
-> pun yang menebak kata kuncinya bisa menimpa konfigurasi Anda.
-
-**4. Import database** lewat phpMyAdmin (panel InfinityFree): import `database_dump.sql`.
-
-**5. Pastikan tidak ada berkas bantu yang tertinggal di server.** Berkas
-sementara untuk setup atau debug harus dihapus begitu selesai dipakai — semuanya
-berada di dalam web root dan bisa diakses siapa saja.
+Susunan A lebih aman karena kode dan berkas kerja berada di luar jangkauan
+browser. Pada Susunan B, satu-satunya pelindung adalah `.htaccess` — dan itu
+harus diverifikasi, bukan diasumsikan.
 
 ### Keamanan
 

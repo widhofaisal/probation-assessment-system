@@ -9,7 +9,7 @@ namespace App\Libraries;
  * '27. FORM PENILAIAN PROBATION TEAM MEMBER.doc', extracted once and inlined
  * here as base64. It is inlined rather than referenced as a file so the DomPDF
  * renderer produces the same letterhead everywhere: DomPDF runs with
- * isRemoteEnabled=false, and the production host (InfinityFree) applies
+ * isRemoteEnabled=false, and the production host applies
  * open_basedir, so a URL or an absolute path would silently resolve to nothing
  * and leave the header without its logo.
  */

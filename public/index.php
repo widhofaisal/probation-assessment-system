@@ -39,10 +39,11 @@ if (getcwd() . DIRECTORY_SEPARATOR !== FCPATH) {
 
 /*
  *---------------------------------------------------------------
- * AUTO-DETECT APPLICATION LAYOUT  (plug-n-play: local & InfinityFree)
+ * AUTO-DETECT APPLICATION LAYOUT  (plug-n-play: lokal & shared hosting)
  *---------------------------------------------------------------
  * Local (php spark serve / XAMPP):  app/ vendor/ writable/  sejajar dengan public/
- * InfinityFree (open_basedir=htdocs/):  app/ vendor/ writable/  di DALAM public/ (= htdocs/)
+ * Shared hosting yang mengunci PHP ke web root (open_basedir):
+ *                                   app/ vendor/ writable/  di DALAM folder publik
  */
 $pathsCandidates = [
     FCPATH . '..' . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Config' . DIRECTORY_SEPARATOR . 'Paths.php', // local layout
@@ -59,7 +60,7 @@ foreach ($pathsCandidates as $candidate) {
 
 if ($pathsFile === null) {
     header('HTTP/1.1 503 Service Unavailable.', true, 503);
-    echo 'Bootstrap error: Config/Paths.php tidak ditemukan. Pastikan folder app/ ada di sebelah public/ (lokal) atau di dalam public/ (InfinityFree).';
+    echo 'Bootstrap error: Config/Paths.php tidak ditemukan. Pastikan folder app/ ada di sebelah public/, atau di dalam folder publik bila web root tidak bisa dipindah.';
     exit(1);
 }
 
@@ -73,7 +74,8 @@ $paths = new Paths();
  *---------------------------------------------------------------
  * Prioritas:
  *   1. env.local.php  (di FCPATH atau parent FCPATH)
- *      -> dipakai di InfinityFree karena putenv() disabled & open_basedir.
+ *      -> dipakai di shared hosting yang mematikan putenv() atau mengunci
+ *         PHP ke web root lewat open_basedir.
  *      -> file ini meng-set $_ENV[...] langsung; CI4 env() membaca $_ENV sebagai fallback.
  *   2. .env standar    -> dibaca CI4 DotEnv otomatis (lokal).
  *
