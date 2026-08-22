@@ -23,20 +23,27 @@ Aplikasi manajemen penilaian karyawan masa probasi berbasis CodeIgniter 4.
 
 ### Langkah Setup
 
-**1. Clone & install dependencies**
+**1. Siapkan source code & install dependencies**
 ```bash
-git clone <repo-url>
+# Dari paket ZIP: ekstrak, lalu masuk ke foldernya
 cd hrd-system-ci
+
+# Atau dari git:
+# git clone <repo-url> && cd hrd-system-ci
+
 composer install
 ```
 
+> Folder `vendor/` sengaja tidak disertakan di paket ZIP karena isinya murni
+> hasil unduhan Composer. `composer install` akan membuatnya.
+
 **2. Konfigurasi environment**
 ```bash
-cp env .env
+cp .env.example .env      # Windows: copy .env.example .env
 ```
-Edit `.env`:
+Buka `.env`, lalu sesuaikan minimal bagian berikut:
 ```
-CI_ENVIRONMENT = development
+CI_ENVIRONMENT = development          # pakai "production" di server sungguhan
 app.baseURL = 'http://localhost:8080/'
 
 database.default.hostname = localhost
@@ -47,7 +54,14 @@ database.default.DBDriver = MySQLi
 database.default.port = 3306
 ```
 
-**3. Import database**
+**3. Buat encryption key**
+```bash
+php spark key:generate
+```
+Perintah ini mengisi `encryption.key` di `.env` dengan nilai acak. Wajib
+dijalankan, dan setiap instalasi harus punya key sendiri.
+
+**4. Import database**
 ```bash
 # Buat database terlebih dahulu
 mysql -u root -e "CREATE DATABASE hrd_system CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
@@ -56,7 +70,7 @@ mysql -u root -e "CREATE DATABASE hrd_system CHARACTER SET utf8mb4 COLLATE utf8m
 mysql -u root hrd_system < database_dump.sql
 ```
 
-**4. Jalankan server**
+**5. Jalankan server**
 ```bash
 php spark serve
 ```
@@ -122,19 +136,35 @@ htdocs/
 
 - `.env`, `env.local.php`, dan `database_dump.sql` sudah di-gitignore.
 - `.htaccess` memblokir akses langsung ke folder `app/`, `vendor/`, `writable/`, dan file `.env`.
+- Proteksi CSRF aktif untuk seluruh request POST/PUT/PATCH/DELETE.
+- Kontrol akses dijaga filter di lapisan route, bukan pengecekan manual per method.
+- Password awal akun baru dibuat acak dan hanya ditampilkan sekali.
+- Percobaan login yang gagal dibatasi 5 per NIK dan 30 per IP dalam 15 menit.
+- ID sesi diperbarui setiap kali login berhasil.
+
+Rinciannya di [Kontrol Akses](#kontrol-akses) dan [Sebelum Dipakai Produksi](#sebelum-dipakai-produksi).
 
 ---
 
 ## Akun Default
 
-| NIK | Nama | Role | Password |
-|-----|------|------|----------|
-| HRD001 | Siti Rahayu | HRD | password123 |
-| TL001 | Ahmad Fauzi | Team Leader | password123 |
-| TL002 | Dewi Anggraini | Team Leader | password123 |
-| EMP001–EMP010 | Karyawan | Probationary Employee | (NIK masing-masing) |
+**Seluruh akun demo memakai password yang sama: `password123`** — sudah
+diverifikasi terhadap hash di dalam `database_dump.sql`.
 
-> Password karyawan probation defaultnya adalah NIK mereka sendiri (contoh: EMP001).
+| NIK | Nama | Role |
+|-----|------|------|
+| HRD001 | Siti Rahayu | HRD |
+| TL001 | Ahmad Fauzi | Team Leader |
+| TL002 | Dewi Anggraini | Team Leader |
+| EMP001, EMP002, EMP003, EMP005, EMP006, EMP007, EMP008 | Karyawan | Probationary Employee |
+
+`EMP004`, `EMP009`, dan `EMP010` ada di data karyawan tetapi **tidak punya akun
+login** — ketiganya sudah dihapus saat data demo dibuat.
+
+Daftar lengkapnya ada di [DEMO-ACCOUNTS.md](DEMO-ACCOUNTS.md).
+
+> Akun demo di atas wajib dihapus sebelum sistem dipakai dengan data karyawan
+> sungguhan.
 
 ---
 
@@ -265,10 +295,92 @@ migration_from_postgres.sql   # Schema + seed data
 
 ---
 
+## Kontrol Akses
+
+Setiap route dijaga filter yang didaftarkan di [app/Config/Routes.php](app/Config/Routes.php):
+
+| Filter | Arti |
+|---|---|
+| `auth` | wajib sudah login |
+| `role:hrd` | wajib login dan role-nya HRD |
+| `role:hrd,team-leader` | wajib login dan role-nya salah satu dari daftar |
+
+Implementasinya di [app/Filters/AuthFilter.php](app/Filters/AuthFilter.php) dan
+[app/Filters/RoleFilter.php](app/Filters/RoleFilter.php), didaftarkan sebagai
+alias di [app/Config/Filters.php](app/Config/Filters.php).
+
+**Route baru wajib diberi filter.** Route tanpa filter terbuka untuk siapa saja,
+termasuk pengunjung yang belum login. Ada tes yang menjaga hal ini
+(`testSemuaRoutePunyaFilterKecualiYangDikecualikan`) — kalau ada route baru yang
+lupa difilter, tes itu gagal dan menyebutkan route mana saja.
+
+Pengecekan role yang ada di dalam controller sengaja dipertahankan sebagai
+lapisan kedua. Untuk sebagian endpoint, controller juga masih memeriksa hal yang
+tidak bisa diketahui filter, yaitu **kepemilikan data** — misalnya Team Leader
+hanya boleh membuka penilaian milik anggota timnya sendiri.
+
+### CSRF
+
+Filter `csrf` aktif global. Konsekuensinya:
+
+- setiap `<form>` wajib memuat `<?= csrf_field() ?>`;
+- setiap pemanggilan JavaScript yang mengubah data wajib memakai `csrfFetch()`
+  (didefinisikan di [app/Views/layouts/main.php](app/Views/layouts/main.php)),
+  bukan `fetch()` biasa — helper itu melampirkan header `X-CSRF-TOKEN`.
+
+Request `GET` tidak butuh token dan boleh tetap memakai `fetch()` biasa.
+
+---
+
+## Pengujian
+
+```bash
+composer test              # seluruh tes
+composer test:coverage     # dengan laporan coverage (butuh Xdebug)
+```
+
+Tesnya **tidak membutuhkan database**, jadi bisa langsung dijalankan setelah
+`composer install`.
+
+| Berkas | Isi |
+|---|---|
+| [tests/feature/KontrolAksesTest.php](tests/feature/KontrolAksesTest.php) | tamu diarahkan ke login, role salah dikembalikan ke dashboardnya, kelengkapan filter route |
+| [tests/unit/PasswordAwalTest.php](tests/unit/PasswordAwalTest.php) | pembuatan password acak dan penyimpanannya sebagai hash |
+| [tests/unit/PembatasanLoginTest.php](tests/unit/PembatasanLoginTest.php) | pembatasan percobaan login |
+| [tests/unit/SiklusProbationTest.php](tests/unit/SiklusProbationTest.php) | aturan jadwal penilaian dan ringkasan dashboard |
+
+---
+
+## Sebelum Dipakai Produksi
+
+Daftar periksa untuk instalasi dengan data karyawan sungguhan:
+
+1. **Setel `CI_ENVIRONMENT = production`** di `.env`. Dengan `development`,
+   setiap error menampilkan stack trace lengkap berikut kredensial database di
+   halaman yang bisa dilihat pengunjung.
+2. **Jalankan `php spark key:generate`.** Setiap instalasi harus punya
+   `encryption.key` sendiri.
+3. **Hapus seluruh akun demo** (lihat [DEMO-ACCOUNTS.md](DEMO-ACCOUNTS.md)), lalu
+   buat akun HRD baru dengan password yang tidak bisa ditebak.
+4. **Kosongkan `session.savePath` di `.env`.** Jangan diisi path relatif seperti
+   `writable/session` — path relatif dihitung dari direktori kerja PHP yaitu
+   `public/`, sehingga file sesi tertulis ke dalam web root dan berpotensi bisa
+   diunduh lewat browser. Isi file sesi memuat `user_id` dan `role`.
+5. **Arahkan document root ke folder `public/`**, bukan ke akar proyek. Kalau
+   tidak bisa, pastikan `.htaccess` yang memblokir `app/`, `vendor/`, dan
+   `writable/` benar-benar aktif.
+6. **Aktifkan HTTPS** lalu setel `app.forceGlobalSecureRequests = true`.
+7. **Turunkan `logger.threshold`** ke 3 atau lebih kecil agar file log tidak
+   membengkak.
+8. **Siapkan cadangan basis data** secara berkala.
+
+---
+
 ## Catatan Pengembangan
 
 - File `.env` tidak di-push ke git (berisi kredensial)
 - `database_dump.sql` tidak di-push ke git (berisi data)
-- Password default user baru = NIK mereka
+- Password awal user baru dibuat acak dan hanya ditampilkan sekali
 - Soft delete aktif pada tabel `employees`
 - Semua perubahan data dicatat di `audit_logs`
+- Belum ada migration/seeder — skema dibuat dengan mengimpor `database_dump.sql`
