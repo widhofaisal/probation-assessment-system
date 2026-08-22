@@ -156,8 +156,19 @@ final class SuratKeputusan
     /**
      * Surat versi HTML — tiruan template untuk DomPDF.
      *
-     * Ukuran dan indennya mengikuti .docx-nya (A4, Times New Roman 12pt, blok
-     * tanda tangan mulai di 4,25 inci dari tepi kiri teks).
+     * Setiap angka pada CSS di bawah diambil dari 'template SK team member.docx'
+     * dan dari PDF hasil ekspor Word-nya, bukan dikira-kira: satuan Word (twip,
+     * 1/20 pt) tinggal dibagi 20, dan posisi tiap baris sudah dicocokkan dengan
+     * koordinat teks pada PDF acuan. Jadi kalau template berubah, angka-angka
+     * ini harus ikut diukur ulang — jangan disetel dengan perasaan.
+     *
+     * Susunannya sengaja mengalir biasa (bukan position:absolute) supaya
+     * berperilaku sama seperti Word: nama atau jabatan yang lebih panjang dari
+     * contohnya mendorong isi di bawahnya, bukan menimpanya.
+     *
+     * Area tanda tangan — garis, Divisi RSC, QR, PT. Sumber Masanda Jaya, dan
+     * Munawar Arsad Senior Manager — dijiplak apa adanya dari template dan
+     * tidak menerima nilai apa pun dari data karyawan.
      */
     public static function html(array $d): string
     {
@@ -180,6 +191,8 @@ final class SuratKeputusan
             'Penilaian Karyawan Masa Percobaan Sdr/Sdri. ' . $h($d['nama']) . ' selama masa percobaan.',
         ];
 
+        // Satu butir = satu baris tabel. Label dan titik dua hanya ditulis pada
+        // butir pertama, persis seperti tabel di template.
         $blok = static function (string $label, array $butir) use ($h): string {
             $out = '';
             foreach ($butir as $i => $isi) {
@@ -196,52 +209,100 @@ final class SuratKeputusan
 
         ob_start(); ?>
 <!DOCTYPE html><html><head><meta charset="UTF-8"><style>
-@page { size: A4 portrait; margin: 0.6cm 2.2cm 0.5cm 1.7cm; }
-body  { font-family: "Times New Roman", Times, serif; font-size: 12pt; color: #000; line-height: 1.25; }
-p     { margin: 0; }
+/* Halaman: pgMar template = atas 320, kanan 1275, bawah 280, kiri 992 twip.
 
-.logo img   { width: 148px; }
-.judul-sk   { text-align: center; font-size: 17pt; font-weight: bold; text-decoration: underline; margin-top: 2px; }
-.nomor      { text-align: center; font-size: 11pt; margin-bottom: 14px; }
-.tentang    { text-align: center; font-weight: bold; margin-bottom: 12px; }
+   Setiap line-height di bawah sudah dikali 1/0,99: DomPDF memasang jarak baris
+   tepat 99% dari yang ditulis (13,7pt jadi 13,563pt), jadi angka mentahnya
+   selalu meleset dan kesalahannya menumpuk sampai kaki surat. Nilai bulat di
+   komentar tiap blok adalah jarak baris Word yang sebenarnya dituju.
 
-table.dasar { width: 100%; border-collapse: collapse; }
-table.dasar td { vertical-align: top; padding: 0 0 2px; }
-.lbl  { width: 116px; }
-.sep  { width: 26px; }
-.no   { width: 22px; }
-.isi  { text-align: justify; }
+   Jangan pernah pakai selektor '*' atau 'html' di sini: DomPDF memasang gaya
+   @page pada elemen html, jadi aturan yang kena elemen itu ikut menghapus
+   margin halamannya dan seluruh surat bergeser ke pojok kertas. */
+@page { size: A4 portrait; margin: 16pt 63.75pt 14pt 49.6pt; }
+body, p, div, table, tr, td, img { margin: 0; padding: 0; border: 0; }
+body  { font-family: "Times New Roman", Times, serif; font-size: 12pt; color: #000; }
+table { border-collapse: collapse; }
+td    { vertical-align: top; }
 
-.memutuskan { text-align: center; font-weight: bold; margin: 14px 0; }
+/* Kop — logo 1344021 x 424052 EMU, indent paragraf 43 twip. */
+.kop     { margin-left: 2.15pt; }
+.kop img { width: 105.7pt; height: 33.35pt; }
 
-.data       { margin: 6px 0 0 34px; font-weight: bold; }
-.data td    { padding: 1px 0; vertical-align: top; }
-.data .k    { width: 96px; }
-.data .t    { width: 18px; }
-.penutup    { margin-top: 10px; text-align: justify; }
+/* Judul. Indent kiri 642 twip dulu, baru rata tengah pada sisa lebarnya —
+   itu sebabnya judulnya sedikit bergeser ke kanan dari tengah halaman.
+   Spasi di depan "SURAT" ada di template dan ikut digarisbawahi. */
+.judul { margin-top: 6.1pt; margin-left: 32.1pt; text-align: center;
+         font-size: 18pt; font-weight: bold; line-height: 20.808pt; }
+.nomor { margin-left: 22.3pt; text-align: center; font-size: 11pt; line-height: 12.677pt; }
 
-.ttd        { margin-top: 26px; width: 100%; }
-.ttd td     { vertical-align: top; }
-.ttd .kolom { width: 47%; }
-.ttd .garis { border-top: 1px solid #000; height: 1px; font-size: 0; }
-.ttd .k     { width: 74px; }
-.ttd .t     { width: 14px; }
-.qr         { text-align: right; padding-top: 10px; }
-.qr img     { width: 74px; height: 74px; }
-.nm         { font-weight: bold; }
-.nm u       { text-decoration: underline; }
+/* "…TENTANG" dan "PENGANGKATAN KARYAWAN TETAP" dua paragraf terpisah dengan
+   indent berbeda, jadi titik tengahnya pun berbeda sedikit. */
+.tentang  { margin-top: 13.75pt; margin-left: 56.6pt; margin-right: 42.55pt;
+            text-align: center; font-weight: bold; line-height: 14.141pt; }
+.tentang2 { margin-left: 13.9pt; text-align: center; font-weight: bold; line-height: 13.687pt; }
 
-.kaki       { margin-top: 22px; }
-.kaki .nama { font-weight: bold; font-size: 13pt; }
-.kaki .alamat { font-size: 11.5pt; }
+/* Dasar hukum — indent tabel 405 twip, kolom 1785/399/412/6534 twip.
+   Lebar td di CSS tidak termasuk padding, jadi tiap kolom = width + padding. */
+.dasar          { margin-top: 13.21pt; margin-left: 20.25pt; }
+.dasar td       { line-height: 13.838pt; padding-top: 0.26pt; }
+.dasar .lbl     { width: 86.75pt; padding-left: 2.5pt; }
+.dasar .sep     { width: 15.1pt;  padding-left: 4.85pt; text-align: center; }
+.dasar .no      { width: 20.4pt;  padding-left: 0.2pt;  text-align: center; }
+.dasar .isi     { width: 320.9pt; padding-left: 5.8pt;  text-align: justify; }
+
+.memutuskan { margin-top: 14.4pt; margin-left: 14.35pt; text-align: center;
+              font-weight: bold; line-height: 13.838pt; }
+
+/* Baris "Menetapkan" — kolom isinya dilebarkan sampai margin kanan (template hanya
+   328pt) supaya tanggal pengangkatan yang lebih panjang dari contohnya tidak
+   memutus "mengangkat karyawan" lebih awal. Baris kedua paragrafnya menjorok
+   1,65pt lebih dalam, sama seperti di template. */
+.tetap      { margin-top: 13.5pt; margin-left: 20.25pt; }
+.tetap td   { line-height: 13.838pt; }
+.tetap .lbl { width: 78.5pt;  padding-left: 2.5pt; }
+.tetap .sep { width: 22.7pt;  padding-right: 5.55pt; text-align: right; }
+.tetap .isi { width: 345.4pt; padding-left: 7.25pt; text-indent: -1.65pt; }
+
+/* Data karyawan — indent 2715 twip, titik dua di tab stop 4049 twip.
+   NIK memang tanpa titik dua pada template; jangan ditambahkan. */
+.data       { margin-top: 0.66pt; margin-left: 135.75pt; font-weight: bold; }
+.data td    { line-height: 13.889pt; }
+.data .sela td { padding-top: 2.9pt; }  /* jarak antar baris data: 16,65pt */
+.data .k    { width: 66.6pt; }
+.data .t    { width: 6.6pt; }
+
+.penutup { margin-top: 0.3pt; margin-left: 22.4pt; line-height: 13.333pt; text-align: justify; }
+
+/* ---------------------------------------------------------------
+   AREA TANDA TANGAN — jiplakan template, tanpa nilai dari karyawan.
+   Blok mulai di indent 6119 twip; titik dua di tab stop 7396 twip;
+   garis 2016125 EMU; QR 704088 EMU persegi.
+   --------------------------------------------------------------- */
+.ttd        { margin-top: 14.03pt; margin-left: 305.95pt; }
+.ttd td     { line-height: 13.838pt; }
+.ttd .k     { width: 63.85pt; }
+.ttd-garis  { margin-top: 1.82pt; margin-left: 308.25pt; width: 158.75pt;
+              border-top: 1.25pt solid #000; height: 0; font-size: 0; }
+.ttd-baris  { margin-left: 305.95pt; font-weight: bold; line-height: 14.05pt; }
+.ttd-divisi { margin-top: 10.69pt; }
+.ttd-qr     { margin-top: 0.93pt; margin-left: 306pt; }
+.ttd-qr img { width: 55.4pt; height: 55.4pt; }
+.ttd-nama   { margin-top: 0.05pt; }
+
+/* Kaki surat — Heading2 14pt lalu alamat 12pt dengan indent kanan 910 twip. */
+.kaki-nama   { margin-top: 38.02pt; margin-left: 22.4pt; font-size: 14pt;
+               font-weight: bold; line-height: 16.111pt; }
+.kaki-alamat { margin-top: 0.15pt; margin-left: 22.4pt; margin-right: 45.5pt; line-height: 13.838pt; }
 </style></head><body>
 
-<div class="logo"><img src="<?= KopSurat::logoDataUri() ?>" alt="SUMBER"></div>
+<div class="kop"><img src="<?= KopSurat::logoDataUri() ?>" alt="SUMBER"></div>
 
-<p class="judul-sk">SURAT KEPUTUSAN</p>
+<p class="judul"><u>&nbsp;SURAT KEPUTUSAN</u></p>
 <p class="nomor"><?= $h($d['nomor']) ?></p>
 
-<p class="tentang">KEPUTUSAN MANAJEMEN PT SUMBER MASANDA JAYA TENTANG<br>PENGANGKATAN KARYAWAN TETAP</p>
+<p class="tentang">KEPUTUSAN MANAJEMEN PT SUMBER MASANDA JAYA<br>TENTANG</p>
+<p class="tentang2">PENGANGKATAN KARYAWAN TETAP</p>
 
 <table class="dasar">
   <?= $blok('Menimbang', array_map($h, $menimbang)) ?>
@@ -251,60 +312,37 @@ table.dasar td { vertical-align: top; padding: 0 0 2px; }
 
 <p class="memutuskan">MEMUTUSKAN</p>
 
-<table class="dasar">
+<table class="tetap">
   <tr>
     <td class="lbl">Menetapkan</td>
     <td class="sep">:</td>
-    <td class="isi" colspan="2">
-      Terhitung sejak tanggal <strong><?= $h($d['tanggal_angkat']) ?></strong>, mengangkat karyawan
-      tersebut dibawah ini
-      <table class="data">
-        <tr><td class="k">Nama</td><td class="t">:</td><td><?= $h($d['nama']) ?></td></tr>
-        <tr><td class="k">NIK</td><td class="t"></td><td><?= $h($d['nik']) ?></td></tr>
-        <tr><td class="k">Departemen</td><td class="t">:</td><td><?= $h($d['departemen']) ?></td></tr>
-        <tr><td class="k">Jabatan</td><td class="t">:</td><td><?= $h($d['jabatan']) ?></td></tr>
-      </table>
-    </td>
+    <td class="isi">Terhitung sejak tanggal <b><?= $h($d['tanggal_angkat']) ?></b>, mengangkat karyawan tersebut dibawah ini</td>
   </tr>
 </table>
 
-<p class="penutup">
-  Demikian surat keputusan ini dibuat, apabila dikemudian hari terdapat kekeliruan dalam surat
-  keputusan ini maka akan dilakukan perbaikan sebagaimana mestinya.
-</p>
+<table class="data">
+  <tr><td class="k">Nama</td><td class="t">:</td><td><?= $h($d['nama']) ?></td></tr>
+  <tr class="sela"><td class="k">NIK</td><td class="t"></td><td><?= $h($d['nik']) ?></td></tr>
+  <tr class="sela"><td class="k">Departemen</td><td class="t">:</td><td><?= $h($d['departemen']) ?></td></tr>
+  <tr class="sela"><td class="k">Jabatan</td><td class="t">:</td><td><?= $h($d['jabatan']) ?></td></tr>
+</table>
+
+<p class="penutup">Demikian surat keputusan ini dibuat, apabila dikemudian hari terdapat kekeliruan dalam surat keputusan ini maka akan dilakukan perbaikan sebagaimana mestinya.</p>
 
 <!-- AREA TANDA TANGAN — dipertahankan sama untuk setiap SK, seperti templatenya -->
 <table class="ttd">
-  <tr>
-    <td class="kolom"></td>
-    <td>
-      <table style="width:100%">
-        <tr><td class="k">Dibuat di</td><td class="t">:</td><td><?= $h($d['kota']) ?></td></tr>
-        <tr><td class="k">Tanggal</td><td class="t">:</td><td><?= $h($d['tanggal_surat']) ?></td></tr>
-      </table>
-      <p class="nm" style="margin-top:6px">Divisi RSC</p>
-    </td>
-    <td class="qr" style="width:96px">
-      <div class="garis" style="border-top:1px solid #000;margin-bottom:34px"></div>
-      <img src="<?= SkAssets::qrDataUri() ?>" alt="">
-    </td>
-  </tr>
-  <tr>
-    <td></td>
-    <td colspan="2">
-      <p class="nm" style="margin-top:14px">PT. Sumber Masanda Jaya</p>
-      <p class="nm"><u>Munawar Arsad</u> Senior Manager</p>
-    </td>
-  </tr>
+  <tr><td class="k">Dibuat di</td><td>: <?= $h($d['kota']) ?></td></tr>
+  <tr><td class="k">Tanggal</td><td>: <?= $h($d['tanggal_surat']) ?></td></tr>
 </table>
+<div class="ttd-garis"></div>
+<p class="ttd-baris ttd-divisi">Divisi RSC</p>
+<p class="ttd-baris">PT. Sumber Masanda Jaya</p>
+<div class="ttd-qr"><img src="<?= SkAssets::qrDataUri() ?>" alt=""></div>
+<p class="ttd-baris ttd-nama"><u>Munawar Arsad</u></p>
+<p class="ttd-baris">Senior Manager</p>
 
-<div class="kaki">
-  <p class="nama">PT. SUMBER MASANDA JAYA</p>
-  <p class="alamat">
-    Jalan Raya Bangsri RT.001 RW.001 Desa Bangsri, Kecamatan Bulakamba, Kabupaten Brebes,
-    Jawa Tengah - 52253. Telp. 0283-6180088, 0283-6180400
-  </p>
-</div>
+<p class="kaki-nama">PT. SUMBER MASANDA JAYA</p>
+<p class="kaki-alamat">Jalan Raya Bangsri RT.001 RW.001 Desa Bangsri, Kecamatan Bulakamba,<br>Kabupaten Brebes, Jawa Tengah - 52253. Telp. 0283-6180088, 0283-6180400</p>
 
 </body></html>
 <?php

@@ -1,253 +1,236 @@
-<?php $this->extend('layouts/main'); $this->section('content'); ?>
+<?php
 
-<!-- Welcome Banner -->
-<div class="mb-8 relative overflow-hidden rounded-2xl">
-    <div class="p-8 bg-gradient-to-br from-green-600 via-blue-600 to-blue-700 text-white shadow-xl rounded-2xl">
-        <div class="relative z-10 flex items-start justify-between flex-wrap gap-6">
-            <div class="flex-1">
-                <div class="inline-block px-4 py-1.5 bg-white/20 backdrop-blur-sm rounded-full mb-4">
-                    <p class="text-sm font-medium text-white/90"><?= htmlspecialchars($greeting) ?></p>
-                </div>
-                <h1 class="text-4xl lg:text-5xl font-bold mb-3 text-white"><?= htmlspecialchars($user['nama']) ?></h1>
-                <div class="flex flex-wrap items-center gap-3 text-white/90 mb-4">
-                    <div class="flex items-center gap-2 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-lg">
-                        <i class="fas fa-id-card"></i>
-                        <span class="text-sm font-medium">NIK: <?= htmlspecialchars($user['nik']) ?></span>
-                    </div>
-                    <div class="flex items-center gap-2 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-lg">
-                        <i class="fas fa-users"></i>
-                        <span class="text-sm font-medium">Team Leader · <?= htmlspecialchars($user['departemen'] ?? '') ?></span>
-                    </div>
-                    <div class="flex items-center gap-2 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-lg">
-                        <i class="fas fa-calendar"></i>
-                        <span class="text-sm font-medium"><?= (new \DateTime('now', new \DateTimeZone('Asia/Jakarta')))->format('d/m/Y') ?></span>
-                    </div>
-                </div>
-                <p class="text-white/80 text-base max-w-2xl leading-relaxed">
-                    Nilai dan pantau perkembangan karyawan probation tim Anda.
-                </p>
+use App\Libraries\RingkasanDashboard;
+use App\Libraries\SiklusProbation;
+
+/**
+ * Dashboard Team Leader.
+ *
+ * Menjawab dua hal saja: siapa yang harus saya nilai, dan bagaimana tim saya
+ * berjalan. Daftar anggota beserta form penilaiannya tetap di menu "Tim Saya" —
+ * dashboard ini hanya menunjuk ke sana, tidak menyalin tabelnya.
+ *
+ * Semua angka datang dari App\Libraries\RingkasanDashboard::teamLeader().
+ */
+$this->extend('layouts/main');
+$this->section('content');
+
+$r = $ringkasan;
+
+
+/** Rupa badge untuk tiap keadaan jadwal penilaian. */
+$rupaJadwal = static function (string $status): array {
+    return match ($status) {
+        SiklusProbation::PERLU_DINILAI   => ['bg-amber-100 text-amber-700', 'Perlu dinilai', 'fa-clock'],
+        SiklusProbation::SUDAH_DINILAI   => ['bg-blue-100 text-blue-700', 'Sudah dinilai 1x', 'fa-check'],
+        SiklusProbation::BELUM_WAKTUNYA  => ['bg-gray-100 text-gray-500', 'Belum waktunya', 'fa-hourglass-half'],
+        SiklusProbation::SELESAI_DINILAI => ['bg-purple-100 text-purple-700', 'Menunggu HRD', 'fa-gavel'],
+        default                          => ['bg-green-100 text-green-700', 'Selesai', 'fa-flag-checkered'],
+    };
+};
+?>
+
+<?= $this->include('partials/dashboard_hero') ?>
+
+<!-- ============================================================
+     1. ANGKA POKOK
+     ============================================================ -->
+<div class="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+    <?php
+    $kartu = [
+        ['Perlu Dinilai Sekarang', $r['perlu_dinilai'],      'fa-clock',      'amber',  '/team',        'Sudah jatuh tempo siklus penilaiannya'],
+        ['Menunggu Keputusan HRD', $r['menunggu_keputusan'], 'fa-gavel',      'purple', '/team',        'Sudah 2x dinilai, tidak ada tugas Anda lagi'],
+        ['Belum Dibuka Member',    $r['belum_dibuka'],       'fa-eye-slash',  'blue',   '/team',        'Hasil yang belum pernah dibuka anggota'],
+        ['Total Penilaian Dibuat', $r['total_penilaian'],    'fa-file-alt',   'green',  '/team',        'Lembar penilaian yang sudah Anda kirim'],
+    ];
+    foreach ($kartu as [$judul, $jumlah, $ikon, $warna, $tautan, $ket]):
+        $aktif = $jumlah > 0;
+        ?>
+        <a href="<?= $tautan ?>" class="block bg-white rounded-xl shadow p-5 border-t-4 border-<?= $aktif ? $warna : 'gray' ?>-500 hover:shadow-lg transition">
+            <div class="flex items-start justify-between gap-2">
+                <p class="text-sm font-semibold text-gray-700 leading-snug"><?= $judul ?></p>
+                <i class="fas <?= $ikon ?> <?= $aktif ? 'text-' . $warna . '-500' : 'text-gray-300' ?>"></i>
             </div>
-            <div class="hidden lg:flex flex-col items-end gap-3">
-                <div class="w-32 h-32 rounded-2xl bg-white/10 backdrop-blur-md border-4 border-white/20 flex items-center justify-center shadow-2xl">
-                    <i class="fas fa-user-tie text-white text-5xl"></i>
-                </div>
-                <a href="/team" class="flex items-center gap-2 bg-white/20 hover:bg-white/30 text-white px-4 py-2.5 rounded-xl font-semibold text-sm transition">
-                    <i class="fas fa-users"></i> Lihat Tim Saya
-                </a>
-            </div>
-        </div>
-        <div class="lg:hidden mt-4">
-            <a href="/team" class="inline-flex items-center gap-2 bg-white/20 hover:bg-white/30 text-white px-4 py-2.5 rounded-xl font-semibold text-sm transition">
-                <i class="fas fa-users"></i> Lihat Tim Saya
-            </a>
-        </div>
-        <div class="absolute top-0 right-0 w-80 h-80 bg-white/5 rounded-full blur-3xl -mr-40 -mt-40"></div>
-        <div class="absolute bottom-0 left-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -ml-32 -mb-32"></div>
-    </div>
+            <p class="text-3xl font-bold <?= $aktif ? 'text-gray-900' : 'text-gray-300' ?> mt-1"><?= $jumlah ?></p>
+            <p class="text-xs text-gray-500 mt-1.5 leading-snug"><?= $ket ?></p>
+        </a>
+    <?php endforeach; ?>
 </div>
 
-<!-- Statistics -->
-<h2 class="text-2xl font-bold text-gray-900 mb-2">Dashboard Overview</h2>
-<p class="text-gray-600 mb-8">Ringkasan data tim Anda</p>
-
-<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-    <div class="bg-white rounded-xl shadow p-6 border-t-4 border-blue-500">
-        <p class="text-gray-500 text-sm">Anggota Tim</p>
-        <p class="text-3xl font-bold text-gray-900 mt-2"><?= $stats['total_team_members'] ?></p>
-        <a href="/team" class="text-blue-600 text-xs mt-2 inline-block hover:underline">Lihat semua →</a>
+<!-- ============================================================
+     2. JADWAL PENILAIAN — inti pekerjaan Team Leader
+     ============================================================ -->
+<div class="bg-white rounded-xl shadow mb-8">
+    <div class="px-6 py-4 border-b flex items-center justify-between gap-3">
+        <div>
+            <h3 class="text-lg font-bold text-gray-900">Jadwal Penilaian</h3>
+            <p class="text-sm text-gray-500">Urut dari yang paling mendesak · siklus <?= SiklusProbation::INTERVAL_HARI ?> hari</p>
+        </div>
+        <a href="/team" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition shrink-0">
+            <i class="fas fa-star mr-1.5"></i>Buka Tim Saya
+        </a>
     </div>
-    <div class="bg-white rounded-xl shadow p-6 border-t-4 border-yellow-500">
-        <p class="text-gray-500 text-sm">Menunggu Penilaian</p>
-        <p class="text-3xl font-bold text-gray-900 mt-2"><?= $stats['pending_evaluation'] ?></p>
-        <?php if ($stats['pending_evaluation'] > 0): ?>
-            <a href="/team" class="text-yellow-600 text-xs mt-2 inline-block hover:underline">Nilai sekarang →</a>
+
+    <?php if (empty($r['jadwal'])): ?>
+        <div class="px-6 py-10 text-center text-gray-400">
+            <i class="fas fa-mug-hot text-3xl mb-3 block text-gray-300"></i>
+            <p class="font-medium text-gray-600">Tidak ada penilaian yang tertunggak</p>
+            <p class="text-sm mt-1">Semua anggota tim Anda sudah dinilai sesuai siklusnya.</p>
+        </div>
+    <?php else: ?>
+        <ul class="divide-y">
+            <?php foreach ($r['jadwal'] as $a): ?>
+                <?php
+                [$kelas, $teks, $ikon] = $rupaJadwal($a['jadwal']);
+                $mendesak = $a['jadwal'] === SiklusProbation::PERLU_DINILAI;
+                ?>
+                <li class="px-6 py-4 flex flex-wrap items-center gap-4 hover:bg-gray-50 transition">
+                    <div class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center shrink-0 font-bold text-gray-600 text-sm">
+                        <?= htmlspecialchars(strtoupper(substr($a['nama'], 0, 1))) ?>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <p class="font-semibold text-gray-900 truncate"><?= htmlspecialchars($a['nama']) ?></p>
+                        <p class="text-xs text-gray-500 truncate"><?= htmlspecialchars($a['nik']) ?> · <?= htmlspecialchars($a['posisi']) ?></p>
+                    </div>
+                    <div class="text-center shrink-0">
+                        <p class="text-xs text-gray-500">Penilaian</p>
+                        <p class="text-sm font-semibold text-gray-800"><?= $a['dinilai'] ?>/<?= SiklusProbation::MAKS_PENILAIAN ?></p>
+                    </div>
+                    <div class="shrink-0 text-right w-36">
+                        <span class="px-2.5 py-1 rounded-full text-xs font-semibold <?= $kelas ?>">
+                            <i class="fas <?= $ikon ?> mr-1"></i><?= $teks ?>
+                        </span>
+                        <p class="text-xs text-gray-400 mt-1">
+                            <?= $mendesak ? 'Bisa dinilai sekarang' : '~' . (int) $a['sisa_hari'] . ' hari lagi' ?>
+                        </p>
+                    </div>
+                    <!-- Lebarnya dikunci walau tombolnya tidak ada, supaya
+                         kolom badge di sebelah kiri tetap lurus antar baris. -->
+                    <div class="w-24 shrink-0 text-right">
+                        <?php if ($mendesak): ?>
+                            <a href="/team" class="inline-block px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition">
+                                Nilai ke-<?= $a['dinilai'] + 1 ?>
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    <?php endif; ?>
+</div>
+
+<!-- ============================================================
+     3. PROGRES TIAP ANGGOTA + MUTU NILAI
+     ============================================================ -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <!-- Garis waktu probation tiap anggota -->
+    <div class="lg:col-span-2 bg-white rounded-xl shadow p-6">
+        <h3 class="text-lg font-bold text-gray-900">Progres Masa Probation</h3>
+        <p class="text-sm text-gray-500 mb-5">Seberapa jauh masa probation tiap anggota sudah berjalan</p>
+
+        <?php if (empty($r['anggota'])): ?>
+            <p class="text-sm text-gray-400 py-8 text-center">Belum ada anggota tim. Hubungi HRD untuk menambahkan.</p>
+        <?php else: ?>
+            <div class="space-y-4">
+                <?php foreach ($r['anggota'] as $a): ?>
+                    <?php
+                    $p      = $a['progres'];
+                    $selesai = $a['status'] !== 'pending';
+                    $warna  = $selesai ? 'bg-green-500' : ($p['persen'] >= 90 ? 'bg-red-500' : ($p['persen'] >= 60 ? 'bg-amber-500' : 'bg-blue-500'));
+                    ?>
+                    <div>
+                        <div class="flex items-baseline justify-between gap-3 mb-1.5">
+                            <p class="text-sm font-medium text-gray-800 truncate"><?= htmlspecialchars($a['nama']) ?></p>
+                            <p class="text-xs text-gray-500 shrink-0">
+                                <?php if ($selesai): ?>
+                                    <?= htmlspecialchars(RingkasanDashboard::labelStatus($a['status'])) ?>
+                                <?php elseif ($p['lewat']): ?>
+                                    <span class="text-red-600 font-semibold">Masa probation terlewat</span>
+                                <?php else: ?>
+                                    hari ke-<?= $p['terpakai'] ?> dari <?= $p['total'] ?> · sisa <?= $p['sisa'] ?> hari
+                                <?php endif; ?>
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                                <div class="h-full <?= $warna ?> rounded-full" style="width: <?= $p['persen'] ?>%"></div>
+                            </div>
+                            <div class="flex gap-1 shrink-0 w-24 justify-end">
+                                <?php foreach ([1 => $a['nilai1'], 2 => $a['nilai2']] as $ke => $ev): ?>
+                                    <?php if ($ev): ?>
+                                        <a href="/evaluations/<?= (int) $ev['id'] ?>"
+                                           title="Penilaian ke-<?= $ke ?>"
+                                           class="px-1.5 py-0.5 rounded text-xs font-bold bg-gray-100 hover:bg-gray-200 <?= SiklusProbation::bandNilai((float) $ev['nilai_total'])['teks'] ?>">
+                                            <?= number_format((float) $ev['nilai_total'], 1) ?>
+                                        </a>
+                                    <?php else: ?>
+                                        <span class="px-1.5 py-0.5 rounded text-xs font-bold bg-gray-50 text-gray-300" title="Penilaian ke-<?= $ke ?> belum ada">–</span>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            <p class="text-xs text-gray-400 mt-5">Dua kotak di kanan adalah nilai penilaian ke-1 dan ke-2 — klik untuk membuka lembarnya.</p>
         <?php endif; ?>
     </div>
-    <div class="bg-white rounded-xl shadow p-6 border-t-4 border-green-500">
-        <p class="text-gray-500 text-sm">Total Penilaian</p>
-        <p class="text-3xl font-bold text-gray-900 mt-2"><?= $stats['total_evaluations'] ?></p>
-    </div>
-</div>
 
-<!-- Recent Evaluations grouped by employee -->
-<div class="bg-white rounded-xl shadow">
-    <div class="px-6 py-4 border-b flex items-center justify-between">
-        <h3 class="text-lg font-bold text-gray-900">Penilaian Terbaru</h3>
-        <a href="/team" class="text-blue-600 hover:text-blue-700 text-sm font-medium">Lihat Semua →</a>
-    </div>
-    <div class="overflow-x-auto">
-        <table class="w-full">
-            <thead>
-                <tr class="bg-gray-50 border-b">
-                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Nama Team Member</th>
-                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Penilaian 1</th>
-                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Penilaian 2</th>
-                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Aksi</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php if (!empty($evalByEmployee)): ?>
-                    <?php foreach ($evalByEmployee as $grp): ?>
-                        <?php $e1 = $grp['eval1']; $e2 = $grp['eval2']; ?>
-                        <tr class="border-b hover:bg-gray-50 transition">
-                            <td class="px-6 py-4 font-medium text-gray-900"><?= htmlspecialchars($grp['employee_nama']) ?></td>
-                            <!-- Penilaian 1 -->
-                            <td class="px-6 py-4">
-                                <?php if ($e1): ?>
-                                    <div class="flex flex-col gap-1">
-                                        <span class="font-bold <?= $e1['nilai_total'] >= 8 ? 'text-green-600' : ($e1['nilai_total'] >= 6 ? 'text-blue-600' : 'text-red-600') ?>">
-                                            <?= htmlspecialchars($e1['nilai_total']) ?>
-                                        </span>
-                                        <p class="text-xs text-gray-400"><?= date('d/m/Y', strtotime($e1['tanggal_penilaian'])) ?></p>
-                                        <div><?= ack_badge($e1) ?></div>
-                                        <div class="flex gap-1 flex-wrap">
-                                            <a href="/evaluations/<?= $e1['id'] ?>"
-                                               class="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg transition">
-                                                <i class="fas fa-eye mr-1"></i>Detail
-                                            </a>
-                                            <button onclick="pdfDownload('/reports/pdf/<?= $e1['id'] ?>')"
-                                               class="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-semibold rounded-lg transition cursor-pointer">
-                                                <i class="fas fa-file-pdf mr-1"></i>PDF
-                                            </button>
-                                        </div>
-                                    </div>
-                                <?php else: ?>
-                                    <span class="text-gray-300 text-xs">-</span>
-                                <?php endif; ?>
-                            </td>
-                            <!-- Penilaian 2 -->
-                            <td class="px-6 py-4">
-                                <?php if ($e2): ?>
-                                    <div class="flex flex-col gap-1">
-                                        <span class="font-bold <?= $e2['nilai_total'] >= 8 ? 'text-green-600' : ($e2['nilai_total'] >= 6 ? 'text-blue-600' : 'text-red-600') ?>">
-                                            <?= htmlspecialchars($e2['nilai_total']) ?>
-                                        </span>
-                                        <p class="text-xs text-gray-400"><?= date('d/m/Y', strtotime($e2['tanggal_penilaian'])) ?></p>
-                                        <div><?= ack_badge($e2) ?></div>
-                                        <div class="flex gap-1 flex-wrap">
-                                            <a href="/evaluations/<?= $e2['id'] ?>"
-                                               class="px-2 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-semibold rounded-lg transition">
-                                                <i class="fas fa-eye mr-1"></i>Detail
-                                            </a>
-                                            <button onclick="pdfDownload('/reports/pdf/<?= $e2['id'] ?>')"
-                                               class="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-semibold rounded-lg transition cursor-pointer">
-                                                <i class="fas fa-file-pdf mr-1"></i>PDF
-                                            </button>
-                                        </div>
-                                    </div>
-                                <?php else: ?>
-                                    <span class="text-gray-300 text-xs">Belum ada</span>
-                                <?php endif; ?>
-                            </td>
-                            <!-- PDF Semua -->
-                            <td class="px-6 py-4">
-                                <div class="flex flex-col gap-1.5">
-                                    <?php if ($e1 && $e2): ?>
-                                        <button onclick="pdfDownload('/reports/pdf-all/<?= $grp['employee_id'] ?>')"
-                                           class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg transition flex items-center gap-1.5 cursor-pointer">
-                                            <i class="fas fa-file-pdf text-xs"></i> PDF Semua
-                                        </button>
-                                    <?php endif; ?>
-                                    <?php if ($e1): ?>
-                                        <button onclick="hapusPenilaian(<?= $e1['id'] ?>, '<?= htmlspecialchars($grp['employee_nama'], ENT_QUOTES) ?> (ke-1)')"
-                                                class="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-semibold rounded-lg transition flex items-center gap-1.5">
-                                            <i class="fas fa-trash text-xs"></i> Hapus Ke-1
-                                        </button>
-                                    <?php endif; ?>
-                                    <?php if ($e2): ?>
-                                        <button onclick="hapusPenilaian(<?= $e2['id'] ?>, '<?= htmlspecialchars($grp['employee_nama'], ENT_QUOTES) ?> (ke-2)')"
-                                                class="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-semibold rounded-lg transition flex items-center gap-1.5">
-                                            <i class="fas fa-trash text-xs"></i> Hapus Ke-2
-                                        </button>
-                                    <?php endif; ?>
-                                </div>
-                            </td>
-                        </tr>
+    <!-- Mutu nilai + hasil akhir tim -->
+    <div class="space-y-6">
+        <?php $n = $r['nilai']; ?>
+        <div class="bg-white rounded-xl shadow p-6">
+            <h3 class="text-lg font-bold text-gray-900">Nilai Tim</h3>
+            <p class="text-sm text-gray-500 mb-4"><?= $n['jumlah'] ?> lembar penilaian</p>
+
+            <?php if ($n['jumlah'] === 0): ?>
+                <p class="text-sm text-gray-400 py-6 text-center">Belum ada penilaian.</p>
+            <?php else: ?>
+                <div class="text-center mb-5">
+                    <p class="text-xs text-gray-500">Rata-rata tim</p>
+                    <p class="text-4xl font-bold <?= SiklusProbation::bandNilai($n['rata'])['teks'] ?>"><?= number_format((float) $n['rata'], 2) ?></p>
+                    <p class="text-xs text-gray-400 mt-0.5">standar kelulusan &ge; <?= SiklusProbation::NILAI_LULUS ?></p>
+                </div>
+                <div class="space-y-2.5">
+                    <?php foreach ($n['band'] as $b): ?>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-gray-600 w-20 shrink-0"><?= htmlspecialchars($b['label']) ?></span>
+                            <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div class="h-full <?= $b['warna'] ?> rounded-full" style="width: <?= $b['persen'] ?>%"></div>
+                            </div>
+                            <span class="text-xs font-bold text-gray-900 w-5 text-right"><?= $b['jumlah'] ?></span>
+                        </div>
                     <?php endforeach; ?>
-                <?php else: ?>
-                    <tr>
-                        <td colspan="4" class="px-6 py-10 text-center text-gray-400">
-                            <i class="fas fa-file-alt text-3xl mb-3 block text-gray-300"></i>
-                            Belum ada penilaian yang dibuat
-                        </td>
-                    </tr>
+                </div>
+                <?php if ($n['di_bawah_standar'] > 0): ?>
+                    <p class="text-xs text-red-600 mt-4 font-medium">
+                        <i class="fas fa-triangle-exclamation mr-1"></i><?= $n['di_bawah_standar'] ?> lembar di bawah standar kelulusan
+                    </p>
                 <?php endif; ?>
-            </tbody>
-        </table>
-    </div>
-</div>
+            <?php endif; ?>
+        </div>
 
-<!-- Modal konfirmasi hapus -->
-<div id="modalHapus" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
-    <div class="absolute inset-0 bg-black/50" onclick="tutupModalHapus()"></div>
-    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
-        <div class="text-center">
-            <div class="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <i class="fas fa-trash text-red-600 text-xl"></i>
-            </div>
-            <h3 class="text-lg font-bold text-gray-900 mb-2">Hapus Penilaian?</h3>
-            <p class="text-sm text-gray-500 mb-1">Anda akan menghapus penilaian untuk:</p>
-            <p id="hapusNamaKaryawan" class="font-semibold text-gray-800 mb-4"></p>
-            <p class="text-xs text-red-500 mb-6">Tindakan ini tidak dapat dibatalkan.</p>
-            <div class="flex gap-3">
-                <button onclick="tutupModalHapus()"
-                        class="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-sm rounded-xl transition">
-                    Batal
-                </button>
-                <button id="btnKonfirmasiHapus"
-                        class="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold text-sm rounded-xl transition">
-                    Ya, Hapus
-                </button>
+        <div class="bg-white rounded-xl shadow p-6">
+            <h3 class="text-lg font-bold text-gray-900 mb-4">Hasil Akhir Tim</h3>
+            <div class="grid grid-cols-2 gap-3">
+                <?php
+                $hasil = [
+                    ['Lulus',           $r['hasil']['lulus'],       'text-green-600', 'bg-green-50'],
+                    ['Tidak Lulus',     $r['hasil']['tidak_lulus'], 'text-red-600',   'bg-red-50'],
+                    ['Warning',         $r['hasil']['warning'],     'text-amber-600', 'bg-amber-50'],
+                    ['Masih Probation', $r['hasil']['berjalan'],    'text-gray-600',  'bg-gray-50'],
+                ];
+                foreach ($hasil as [$label, $jumlah, $teks, $latar]):
+                    ?>
+                    <div class="<?= $latar ?> rounded-lg p-3 text-center">
+                        <p class="text-2xl font-bold <?= $teks ?>"><?= $jumlah ?></p>
+                        <p class="text-xs text-gray-600 mt-0.5"><?= $label ?></p>
+                    </div>
+                <?php endforeach; ?>
             </div>
         </div>
     </div>
 </div>
-
-<script>
-var hapusTargetId = null;
-
-function hapusPenilaian(id, nama) {
-    hapusTargetId = id;
-    document.getElementById('hapusNamaKaryawan').textContent = nama;
-    document.getElementById('modalHapus').classList.remove('hidden');
-}
-
-function tutupModalHapus() {
-    document.getElementById('modalHapus').classList.add('hidden');
-    hapusTargetId = null;
-}
-
-document.getElementById('btnKonfirmasiHapus').addEventListener('click', function() {
-    if (!hapusTargetId) return;
-    var btn = this;
-    btn.disabled = true;
-    btn.textContent = 'Menghapus...';
-
-    fetch('/evaluations/' + hapusTargetId, {
-        method: 'DELETE',
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]') ?
-                            document.querySelector('meta[name="csrf-token"]').content : ''
-        }
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.success) {
-            tutupModalHapus();
-            window.location.reload();
-        } else {
-            alert(data.error || 'Gagal menghapus penilaian');
-            btn.disabled = false;
-            btn.textContent = 'Ya, Hapus';
-        }
-    })
-    .catch(function() {
-        alert('Terjadi kesalahan. Silakan coba lagi.');
-        btn.disabled = false;
-        btn.textContent = 'Ya, Hapus';
-    });
-});
-</script>
 
 <?php $this->endSection(); ?>

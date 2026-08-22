@@ -2,11 +2,22 @@
 
 namespace App\Controllers;
 
+use App\Libraries\RingkasanDashboard;
+use App\Libraries\SiklusProbation;
 use App\Models\EmployeeModel;
 use App\Models\EvaluationDecisionModel;
 use App\Models\EvaluationModel;
 use App\Models\UserModel;
 
+/**
+ * Dashboard tiap peran.
+ *
+ * Dashboard di sini sengaja TIDAK mengulang isi menu lain. "Daftar Penilaian",
+ * "Tim Saya", dan "Hasil Evaluasi" sudah menampilkan daftar rinci beserta
+ * tombol aksinya; dashboard hanya menjawab tiga hal: sudah sampai mana
+ * datanya, apa yang menunggu tindakan saya, dan ke mana arahnya. Perhitungannya
+ * ada di RingkasanDashboard, aturan siklusnya di SiklusProbation.
+ */
 class DashboardController extends BaseController
 {
     protected $employeeModel;
@@ -23,7 +34,11 @@ class DashboardController extends BaseController
     }
 
     /**
-     * HRD Dashboard
+     * Dashboard HRD — keadaan seluruh proses probation perusahaan.
+     *
+     * Tiga query, berapa pun banyaknya karyawan: seluruh karyawan, seluruh
+     * penilaian, seluruh keputusan. Sisanya dihitung di memori oleh
+     * RingkasanDashboard, jadi tidak ada query di dalam perulangan.
      */
     public function hrd()
     {
@@ -31,56 +46,36 @@ class DashboardController extends BaseController
             return redirect()->to('/auth/login');
         }
 
-        $stats = [
-            'total_employees' => $this->employeeModel->countAllResults(),
-            'pending' => $this->employeeModel->countByStatus('pending'),
-            'lulus' => $this->employeeModel->countByStatus('lulus'),
-            'tidak_lulus' => $this->employeeModel->countByStatus('tidak-lulus'),
-            'warning' => $this->employeeModel->countByStatus('warning'),
-            'total_evaluations' => $this->evaluationModel->countAllResults(),
-            'belum_dilihat' => $this->evaluationModel->countUnviewed(),
-        ];
-
-        $recentEvalsRaw = $this->evaluationModel
-            ->select('penilaian.*, employees.nama, employees.nik, users.nama as team_leader_nama')
-            ->join('employees', 'penilaian.employee_id = employees.id')
-            ->join('users', 'penilaian.team_leader_id = users.id')
-            ->orderBy('penilaian.tanggal_penilaian', 'DESC')
-            ->limit(20)
+        $employees = $this->employeeModel->getWithTeamLeader();
+        $penilaian = $this->evaluationModel
+            ->select('employee_id, nomor_penilaian, nilai_total, tanggal_penilaian, dilihat_at')
             ->findAll();
+        $keputusan = $this->evaluationDecisionModel->findAll();
+        $user      = session()->get();
 
-        $evalByEmployee = [];
-        foreach ($recentEvalsRaw as $eval) {
-            $eid   = $eval['employee_id'];
-            $nomor = (int)($eval['nomor_penilaian'] ?? 1);
-            if (!isset($evalByEmployee[$eid])) {
-                $evalByEmployee[$eid] = [
-                    'employee_id'      => $eid,
-                    'nik'              => $eval['nik'],
-                    'nama'             => $eval['nama'],
-                    'team_leader_nama' => $eval['team_leader_nama'],
-                    'eval1'            => null,
-                    'eval2'            => null,
-                ];
-            }
-            if ($nomor === 1 && !$evalByEmployee[$eid]['eval1']) $evalByEmployee[$eid]['eval1'] = $eval;
-            if ($nomor === 2 && !$evalByEmployee[$eid]['eval2']) $evalByEmployee[$eid]['eval2'] = $eval;
-        }
-
-        $data = [
-            'title'             => 'Dashboard HRD',
-            'greeting'          => $this->getGreeting(),
-            'user'              => session()->get(),
-            'stats'             => $stats,
-            'recentEvaluations' => array_slice($recentEvalsRaw, 0, 10),
-            'evalByEmployee'    => array_slice(array_values($evalByEmployee), 0, 10),
-        ];
-
-        return view('Dashboard/hrd', $data);
+        return view('Dashboard/hrd', [
+            'title'     => 'Dashboard HRD',
+            'greeting'  => $this->getGreeting(),
+            'user'      => $user,
+            'ringkasan' => RingkasanDashboard::hrd($employees, $penilaian, $keputusan),
+            // Kepala halaman dirakit di sini, bukan di view: partial hero
+            // dirender View::include() yang hanya melihat data dari controller,
+            // bukan variabel lokal milik view pemanggilnya.
+            'heroChips' => [
+                ['fa-id-card', 'NIK: ' . ($user['nik'] ?? '')],
+                ['fa-user-shield', 'HRD'],
+                ['fa-users', count($employees) . ' Team Member terdaftar'],
+            ],
+            'heroDesc'  => 'Ringkasan proses probation seluruh perusahaan. Daftar rinci dan tombol aksinya ada di menu Data Team Member dan Daftar Penilaian.',
+        ]);
     }
 
     /**
-     * Team Leader Dashboard
+     * Dashboard Team Leader — beban penilaian dan perkembangan tim sendiri.
+     *
+     * Penilaian diambil menurut team_leader_id, sama seperti halaman "Tim Saya",
+     * supaya kedua halaman tidak pernah berbeda kesimpulan tentang orang yang
+     * sama.
      */
     public function teamLeader()
     {
@@ -88,46 +83,23 @@ class DashboardController extends BaseController
             return redirect()->to('/auth/login');
         }
 
-        $teamLeaderId = session()->get('user_id');
+        $teamLeaderId = (int) session()->get('user_id');
         $employees    = $this->employeeModel->getByTeamLeader($teamLeaderId);
-        $evaluations  = $this->evaluationModel->getByTeamLeader($teamLeaderId);
+        $penilaian    = $this->evaluationModel->getByTeamLeader($teamLeaderId);
+        $user         = session()->get();
 
-        $stats = [
-            'total_team_members' => count($employees),
-            'pending_evaluation' => count(array_filter($employees, fn($e) => $e['status'] === 'pending')),
-            'total_evaluations'  => count($evaluations),
-            'submitted'          => count(array_filter($evaluations, fn($e) => $e['status'] === 'submitted')),
-        ];
-
-        // Group evaluations by employee for the "Penilaian Terbaru" section
-        $evalByEmployee = [];
-        foreach ($evaluations as $eval) {
-            $eid   = $eval['employee_id'];
-            $nomor = (int)($eval['nomor_penilaian'] ?? 1);
-            if (!isset($evalByEmployee[$eid])) {
-                $evalByEmployee[$eid] = [
-                    'employee_id'   => $eid,
-                    'employee_nama' => $eval['employee_nama'],
-                    'nik'           => $eval['nik'],
-                    'eval1'         => null,
-                    'eval2'         => null,
-                ];
-            }
-            if ($nomor === 1 && !$evalByEmployee[$eid]['eval1']) $evalByEmployee[$eid]['eval1'] = $eval;
-            if ($nomor === 2 && !$evalByEmployee[$eid]['eval2']) $evalByEmployee[$eid]['eval2'] = $eval;
-        }
-
-        $data = [
-            'title'             => 'Dashboard Team Leader',
-            'greeting'          => $this->getGreeting(),
-            'user'              => session()->get(),
-            'stats'             => $stats,
-            'employees'         => $employees,
-            'recentEvaluations' => array_slice($evaluations, 0, 5),
-            'evalByEmployee'    => array_slice(array_values($evalByEmployee), 0, 5),
-        ];
-
-        return view('Dashboard/teamleader', $data);
+        return view('Dashboard/teamleader', [
+            'title'     => 'Dashboard Team Leader',
+            'greeting'  => $this->getGreeting(),
+            'user'      => $user,
+            'ringkasan' => RingkasanDashboard::teamLeader($employees, $penilaian),
+            'heroChips' => [
+                ['fa-id-card', 'NIK: ' . ($user['nik'] ?? '')],
+                ['fa-user-tie', 'Team Leader · ' . ($user['departemen'] ?? '-')],
+                ['fa-users', count($employees) . ' anggota tim'],
+            ],
+            'heroDesc'  => 'Ringkasan perkembangan tim Anda. Untuk menilai atau membuka lembar penilaian, gunakan menu Tim Saya.',
+        ]);
     }
 
     /**
@@ -177,15 +149,11 @@ class DashboardController extends BaseController
             }
         }
 
-        $today          = new \DateTime('today');
         // Keputusan Lulus per karyawan, sekali query — dipakai tombol SK di daftar.
         $skMap = [];
         foreach ($this->evaluationDecisionModel->where('status_akhir', 'lulus')->findAll() as $kep) {
             $skMap[(int) $kep['employee_id']] = $kep;
         }
-
-        $intervalHarian = 45; // Siklus penilaian: ~1,5 bulan
-        $maxPenilaian   = 2;  // Maks 2x penilaian selama probation 3 bulan
 
         foreach ($employees as &$emp) {
             $lastEval       = $lastEvalMap[$emp['id']] ?? null;
@@ -195,7 +163,6 @@ class DashboardController extends BaseController
             $emp['eval2_id']     = $lastEval['eval2_id'] ?? null;
             $emp['eval1_ack']    = $lastEval['eval1_ack'] ?? null;
             $emp['eval2_ack']    = $lastEval['eval2_ack'] ?? null;
-            $mulai          = $emp['mulai_probation'] ? new \DateTime($emp['mulai_probation']) : null;
 
             // Surat Keputusan hanya ada setelah HRD memutuskan Lulus dan mengisi
             // nomor SK-nya. Disetel di sini, sebelum cabang-cabang di bawah:
@@ -213,36 +180,20 @@ class DashboardController extends BaseController
                 continue;
             }
 
-            // Sudah dinilai 2x → menunggu keputusan HRD
-            if ($totalPenilaian >= $maxPenilaian) {
-                $emp['eval_status']     = 'selesai_dinilai';
-                $emp['last_eval_date']  = $lastEval['last_eval_date'];
-                $emp['total_penilaian'] = $totalPenilaian;
-                $emp['hari_sejak_eval'] = null;
-                $emp['perlu_dinilai']   = false;
-                continue;
-            }
+            // Kapan dia boleh dinilai lagi — aturannya ada di SiklusProbation,
+            // dipakai juga oleh dashboard supaya keduanya tidak bisa berbeda.
+            $jadwal = SiklusProbation::jadwal(
+                $emp['mulai_probation'] ?? null,
+                $totalPenilaian,
+                $lastEval['last_eval_date'] ?? null
+            );
 
-            if ($totalPenilaian === 0) {
-                // Belum pernah dinilai — cek apakah sudah 45 hari sejak mulai probation
-                $hariMasuk    = $mulai ? (int)$today->diff($mulai)->days : $intervalHarian;
-                $perluDinilai = $hariMasuk >= $intervalHarian;
-                $emp['eval_status']     = $perluDinilai ? 'perlu_dinilai' : 'belum_waktunya';
-                $emp['hari_sejak_eval'] = null;
-                $emp['sisa_hari']       = $perluDinilai ? 0 : $intervalHarian - $hariMasuk;
-            } else {
-                // Sudah dinilai 1x — cek apakah sudah 45 hari sejak penilaian terakhir
-                $lastDate     = new \DateTime($lastEval['last_eval_date']);
-                $hariSejak    = (int)$today->diff($lastDate)->days;
-                $perluDinilai = $hariSejak >= $intervalHarian;
-                $emp['eval_status']     = $perluDinilai ? 'perlu_dinilai' : 'sudah_dinilai';
-                $emp['hari_sejak_eval'] = $hariSejak;
-                $emp['sisa_hari']       = $perluDinilai ? 0 : $intervalHarian - $hariSejak;
-            }
-
+            $emp['eval_status']     = $jadwal['status'];
+            $emp['hari_sejak_eval'] = $jadwal['hari_sejak_eval'];
+            $emp['sisa_hari']       = $jadwal['sisa_hari'];
             $emp['last_eval_date']  = $lastEval['last_eval_date'] ?? null;
             $emp['total_penilaian'] = $totalPenilaian;
-            $emp['perlu_dinilai']   = $emp['eval_status'] === 'perlu_dinilai';
+            $emp['perlu_dinilai']   = $jadwal['status'] === SiklusProbation::PERLU_DINILAI;
         }
         unset($emp);
 
@@ -262,15 +213,17 @@ class DashboardController extends BaseController
     }
 
     /**
-     * Probationary Employee Dashboard
+     * Dashboard Team Member — posisi dirinya sendiri dalam masa probation.
+     *
+     * Rincian tiap lembar penilaian tetap di menu "Hasil Evaluasi"; di sini
+     * hanya sejauh mana probationnya berjalan, langkah apa yang sedang
+     * ditunggu, dan nilai yang sudah keluar.
      */
     public function probationary()
     {
         if (!$this->isAuthorized('probationary-employee')) {
             return redirect()->to('/auth/login');
         }
-
-        $userId = session()->get('user_id');
 
         // Find the employee record for this user (by NIK)
         $employee = $this->employeeModel->findByNik(session()->get('nik'));
@@ -286,16 +239,18 @@ class DashboardController extends BaseController
         $keputusan = $this->evaluationDecisionModel->getLulusByEmployee((int) $employee['id']);
         $sk        = EvaluationDecisionModel::skSiap($keputusan) ? $keputusan : null;
 
-        $data = [
-            'title' => 'Dashboard',
-            'greeting' => $this->getGreeting(),
-            'user' => session()->get(),
-            'employee' => $employee,
-            'evaluations' => $evaluations,
-            'sk' => $sk,
-        ];
-
-        return view('Dashboard/probationary', $data);
+        return view('Dashboard/probationary', [
+            'title'     => 'Dashboard',
+            'greeting'  => $this->getGreeting(),
+            'user'      => session()->get(),
+            'employee'  => $employee,
+            'ringkasan' => RingkasanDashboard::member($employee, $evaluations, $sk),
+            'heroChips' => [
+                ['fa-id-card', 'NIK: ' . ($employee['nik'] ?? '')],
+                ['fa-briefcase', ($employee['posisi'] ?? '-') . ' · ' . ($employee['departemen'] ?? '-')],
+            ],
+            'heroDesc'  => 'Perkembangan masa probasi Anda. Rincian tiap penilaian ada di menu Hasil Evaluasi.',
+        ]);
     }
 
     /**
