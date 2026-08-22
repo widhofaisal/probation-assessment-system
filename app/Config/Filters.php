@@ -2,6 +2,8 @@
 
 namespace Config;
 
+use App\Filters\AuthFilter;
+use App\Filters\RoleFilter;
 use CodeIgniter\Config\Filters as BaseFilters;
 use CodeIgniter\Filters\Cors;
 use CodeIgniter\Filters\CSRF;
@@ -34,6 +36,10 @@ class Filters extends BaseFilters
         'forcehttps'    => ForceHTTPS::class,
         'pagecache'     => PageCache::class,
         'performance'   => PerformanceMetrics::class,
+
+        // Filter aplikasi - lihat app/Filters/
+        'auth'          => AuthFilter::class,   // wajib sudah login
+        'role'          => RoleFilter::class,   // batasi berdasarkan role, mis. role:hrd
     ];
 
     /**
@@ -73,12 +79,23 @@ class Filters extends BaseFilters
     public array $globals = [
         'before' => [
             // 'honeypot',
-            // 'csrf',
+
+            // Proteksi CSRF. Hanya memeriksa POST/PUT/PATCH/DELETE - request GET
+            // dilewatkan begitu saja, jadi aman dipasang global.
+            //
+            // Setiap form wajib memuat csrf_field(), dan setiap fetch() yang
+            // mengubah data wajib mengirim header X-CSRF-TOKEN. Helper
+            // csrfFetch() di app/Views/layouts/main.php sudah menanganinya.
+            'csrf',
+
             // 'invalidchars',
         ],
         'after' => [
             // 'honeypot',
-            // 'secureheaders',
+
+            // Header pengerasan browser: X-Frame-Options, X-Content-Type-Options,
+            // Referrer-Policy, dan sejenisnya.
+            'secureheaders',
         ],
     ];
 

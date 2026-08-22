@@ -137,15 +137,20 @@ class EmployeesController extends BaseController
 
         $employeeId = $this->employeeModel->insert($data);
 
-        // Buat akun login otomatis, password default = NIK
-        $nikValue = $this->request->getPost('nik');
+        // Buat akun login otomatis dengan password awal yang acak. Sebelumnya
+        // password disamakan dengan NIK, padahal NIK sekaligus dipakai sebagai
+        // username - jadi akun karyawan baru bisa dimasuki siapa pun yang tahu
+        // NIK-nya. Nilainya hanya ditampilkan sekali di pesan sukses.
+        $nikValue     = $this->request->getPost('nik');
+        $passwordAwal = null;
         $existingUser = $this->userModel->where('nik', $nikValue)->first();
         if (!$existingUser) {
+            $passwordAwal = UserModel::generatePassword();
             $this->userModel->skipValidation(true)->insert([
                 'nik'           => $nikValue,
                 'nama'          => $this->request->getPost('nama'),
                 'email'         => $this->request->getPost('email') ?: null,
-                'password_hash' => UserModel::hashPassword($nikValue),
+                'password_hash' => UserModel::hashPassword($passwordAwal),
                 'role'          => 'probationary-employee',
                 'departemen'    => $this->request->getPost('departemen'),
                 'posisi'        => $this->request->getPost('posisi'),
@@ -159,7 +164,20 @@ class EmployeesController extends BaseController
 
         if ($db->transStatus()) {
             $this->logAudit('CREATE', 'employees', $this->employeeModel->getInsertID(), null, $data);
-            return redirect()->to('/employees')->with('success', 'Team Member berhasil ditambahkan. Password login: ' . $nikValue);
+
+            $pesan = 'Team Member berhasil ditambahkan.';
+            if ($passwordAwal !== null) {
+                $pesan .= ' Password login: ' . $passwordAwal
+                    . ' - catat sekarang, password ini tidak bisa dilihat lagi.';
+            } else {
+                $pesan .= ' Akun login dengan NIK tersebut sudah ada sebelumnya,'
+                    . ' jadi passwordnya tidak diubah.';
+            }
+
+            return redirect()->to('/employees')->with(
+                $passwordAwal !== null ? 'success_sekali' : 'success',
+                $pesan
+            );
         }
 
         return redirect()->back()->withInput()->with('error', 'Gagal menambahkan karyawan');

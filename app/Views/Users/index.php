@@ -115,7 +115,7 @@ $deptOptions = ['Human Resources', 'Produksi', 'Quality Control', 'Warehouse', '
                     <label class="block text-sm font-medium text-gray-700 mb-1">NIK <span class="text-red-500">*</span></label>
                     <input type="text" name="nik" required placeholder="Contoh: TL003"
                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
-                    <p class="text-xs text-gray-400 mt-1">Password default = NIK</p>
+                    <p class="text-xs text-gray-400 mt-1">Password awal dibuat acak oleh sistem dan ditampilkan sekali setelah user tersimpan</p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Role</label>
@@ -310,25 +310,38 @@ function closeModal(id) {
 }
 
 function resetPassword(id, nik) {
-    showConfirm('Reset password ' + nik + '? Password akan direset ke NIK: ' + nik, function () {
-        fetch('/users/' + id + '/reset-password', {
-            method: 'POST',
-            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' },
-            body: JSON.stringify({ '<?= csrf_token() ?>': '<?= csrf_hash() ?>' })
+    showConfirm('Reset password ' + nik + '? Sistem akan membuat password acak yang baru.', function () {
+        csrfFetch('/users/' + id + '/reset-password', {
+            method: 'POST'
         })
         .then(function (r) { return r.json(); })
         .then(function (data) {
-            if (data.success) showToast(data.message, 'success');
-            else showToast(data.error, 'error');
+            if (!data.success) {
+                showToast(data.error, 'error');
+                return;
+            }
+
+            // Password baru hanya dikirim sekali oleh server dan tidak disimpan
+            // dalam bentuk terbaca, jadi toast-nya sengaja tidak hilang sendiri
+            // (durasi 0) supaya HRD sempat mencatat sebelum menutupnya.
+            showToast(
+                '<div class="font-semibold mb-1">' + data.message + '</div>' +
+                '<div class="mb-1">Password baru:</div>' +
+                '<div class="font-mono text-base font-bold tracking-wide bg-gray-100 rounded px-2 py-1 inline-block">'
+                    + data.password + '</div>' +
+                '<div class="text-xs text-gray-500 mt-2">Catat dan serahkan ke pemilik akun. ' +
+                    'Password ini tidak bisa dilihat lagi setelah pesan ini ditutup.</div>',
+                'success',
+                0
+            );
         });
     });
 }
 
 function hapusUser(id, nama) {
     showConfirm('Hapus Team Leader ' + nama + '?', function () {
-        fetch('/users/' + id, {
-            method: 'DELETE',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        csrfFetch('/users/' + id, {
+            method: 'DELETE'
         })
         .then(function (r) { return r.json(); })
         .then(function (data) {

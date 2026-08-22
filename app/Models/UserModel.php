@@ -82,4 +82,28 @@ class UserModel extends Model
     {
         return password_hash($password, PASSWORD_BCRYPT);
     }
+
+    /**
+     * Buat password awal yang acak.
+     *
+     * Sebelumnya password awal setiap akun diisi dengan NIK orang tersebut,
+     * padahal NIK juga dipakai sebagai username dan diketahui banyak orang -
+     * artinya password akun baru bisa ditebak siapa saja. Sekarang dibuat acak
+     * dan hanya ditampilkan sekali kepada HRD untuk diteruskan ke pemiliknya.
+     *
+     * Huruf dan angka yang mudah tertukar (0, O, 1, l, I) sengaja dibuang,
+     * karena password ini akan disalin manual oleh manusia.
+     */
+    public static function generatePassword(int $panjang = 12): string
+    {
+        $alfabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+        $batas   = strlen($alfabet) - 1;
+
+        $password = '';
+        for ($i = 0; $i < $panjang; $i++) {
+            $password .= $alfabet[random_int(0, $batas)];
+        }
+
+        return $password;
+    }
 }

@@ -526,14 +526,8 @@ function filterTable() {
 // ---- Delete ----
 function confirmDelete(id, nama) {
     showConfirm('Hapus karyawan "' + nama + '"? Data yang sudah dihapus tidak bisa dikembalikan.', function() {
-        var csrfToken = document.querySelector('meta[name="csrf-token"]') ?
-                        document.querySelector('meta[name="csrf-token"]').getAttribute('content') : '';
-        fetch('/employees/' + id, {
-            method: 'DELETE',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRF-TOKEN': csrfToken
-            }
+        csrfFetch('/employees/' + id, {
+            method: 'DELETE'
         })
             .then(function(r) { return r.json(); })
             .then(function(data) {

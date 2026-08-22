@@ -48,11 +48,15 @@ class UsersController extends BaseController
             return redirect()->back()->withInput()->with('error', 'NIK sudah digunakan');
         }
 
+        // Password awal dibuat acak, bukan disamakan dengan NIK. Nilainya hanya
+        // muncul sekali di pesan sukses di bawah - setelah itu tinggal hash-nya.
+        $passwordAwal = UserModel::generatePassword();
+
         $this->userModel->skipValidation(true)->insert([
             'nik'            => $nik,
             'nama'           => $this->request->getPost('nama'),
             'email'          => $this->request->getPost('email') ?: null,
-            'password_hash'  => UserModel::hashPassword($nik),
+            'password_hash'  => UserModel::hashPassword($passwordAwal),
             'role'           => $role,
             'departemen'     => $this->request->getPost('departemen') ?: null,
             'posisi'         => $this->request->getPost('posisi') ?: null,
@@ -61,7 +65,11 @@ class UsersController extends BaseController
             'alamat'         => $this->request->getPost('alamat') ?: null,
         ]);
 
-        return redirect()->to('/users')->with('success', 'User berhasil ditambahkan. Password default: ' . $nik);
+        return redirect()->to('/users')->with(
+            'success_sekali',
+            'User berhasil ditambahkan. Password awal: ' . $passwordAwal
+                . ' - catat sekarang, password ini tidak bisa dilihat lagi.'
+        );
     }
 
     public function update(int $id)
@@ -116,11 +124,20 @@ class UsersController extends BaseController
             return $this->response->setStatusCode(404)->setJSON(['error' => 'User tidak ditemukan']);
         }
 
+        // Password baru dibuat acak, bukan dikembalikan ke NIK. Kalau direset ke
+        // NIK, akun tersebut praktis terbuka bagi siapa pun yang tahu NIK-nya
+        // sampai pemiliknya sempat mengganti password.
+        $passwordBaru = UserModel::generatePassword();
+
         $this->userModel->skipValidation(true)->update($id, [
-            'password_hash' => UserModel::hashPassword($user['nik']),
+            'password_hash' => UserModel::hashPassword($passwordBaru),
         ]);
 
-        return $this->response->setJSON(['success' => true, 'message' => 'Password direset ke NIK: ' . $user['nik']]);
+        return $this->response->setJSON([
+            'success'  => true,
+            'message'  => 'Password ' . $user['nik'] . ' berhasil direset.',
+            'password' => $passwordBaru,
+        ]);
     }
 
     public function delete(int $id)

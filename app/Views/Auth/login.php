@@ -27,6 +27,7 @@
 
             <!-- Form -->
             <form class="space-y-5" action="/auth/login" method="POST">
+                <?= csrf_field() ?>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">NIK / Email</label>
                     <input

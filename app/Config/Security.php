@@ -70,8 +70,17 @@ class Security extends BaseConfig
      * --------------------------------------------------------------------------
      *
      * Regenerate CSRF Token on every submission.
+     *
+     * Sengaja dimatikan: token dipakai satu kali per sesi, bukan diputar tiap
+     * request. Kalau diputar, token yang sudah terlanjur tercetak di halaman
+     * menjadi basi begitu ada satu AJAX yang jalan - misalnya menghapus user
+     * lewat tombol hapus, lalu submit form tambah user di halaman yang sama
+     * akan ditolak 403 padahal pengguna tidak melakukan kesalahan.
+     *
+     * Token per sesi tetap menutup serangan CSRF, karena situs lain tidak bisa
+     * membaca nilai token milik sesi korban.
      */
-    public bool $regenerate = true;
+    public bool $regenerate = false;
 
     /**
      * --------------------------------------------------------------------------

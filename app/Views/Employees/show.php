@@ -79,7 +79,7 @@
 <script>
 function deleteEmployee(id) {
     showConfirm('Hapus karyawan ini? Data yang sudah dihapus tidak bisa dikembalikan.', function() {
-        fetch('/employees/' + id, { method: 'DELETE' })
+        csrfFetch('/employees/' + id, { method: 'DELETE' })
             .then(function(r) {
                 if (r.ok) {
                     window.location = '/employees';

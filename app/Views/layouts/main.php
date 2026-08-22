@@ -221,6 +221,30 @@ document.addEventListener('click', function(e) {
     if (w && !w.contains(e.target)) document.getElementById('profileDropdown').classList.add('hidden');
 });
 
+// ===== CSRF =====
+// Pembungkus fetch() yang otomatis melampirkan token CSRF.
+//
+// Sejak proteksi CSRF diaktifkan (app/Config/Filters.php), setiap request
+// POST / PUT / PATCH / DELETE tanpa token akan ditolak dengan 403. Pakai
+// csrfFetch() menggantikan fetch() untuk semua request yang mengubah data,
+// supaya tokennya tidak perlu diingat satu per satu di tiap halaman.
+//
+// Request GET tidak butuh token dan boleh tetap memakai fetch() biasa.
+function csrfToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : '';
+}
+
+function csrfFetch(url, options) {
+    options = options || {};
+    options.headers = Object.assign({
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRF-TOKEN': csrfToken()
+    }, options.headers || {});
+    options.credentials = options.credentials || 'same-origin';
+    return fetch(url, options);
+}
+
 // ===== TOAST SYSTEM =====
 function showToast(message, type, duration) {
     type = type || 'success';
@@ -387,6 +411,12 @@ function mulaiUnduhPdf(url) {
 // ===== FLASH MESSAGES =====
 <?php if (session()->has('success')): ?>
 showToast(<?= json_encode(session()->getFlashdata('success')) ?>, 'success');
+<?php endif; ?>
+<?php if (session()->has('success_sekali')): ?>
+// Pesan yang memuat informasi sekali pakai - misalnya password awal akun baru.
+// Durasi 0 berarti tidak hilang sendiri, harus ditutup manual, supaya tidak
+// keburu lenyap sebelum sempat dicatat.
+showToast(<?= json_encode(session()->getFlashdata('success_sekali')) ?>, 'success', 0);
 <?php endif; ?>
 <?php if (session()->has('error')): ?>
 showToast(<?= json_encode(session()->getFlashdata('error')) ?>, 'error', 6000);
