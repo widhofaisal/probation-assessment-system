@@ -154,7 +154,15 @@ $secretPatterns = @(
     @{ Name = 'akun hosting InfinityFree'; Pattern = 'if0_\d{4,}' }
     @{ Name = 'host DB showcase';          Pattern = 'sql\d+\.infinityfree\.com' }
     @{ Name = 'password DB terisi';        Pattern = "database\.default\.password$h=$h\S+" }
-    @{ Name = 'encryption key terisi';     Pattern = "(encryption\.key|encKey)$h[=:]$h[`"']?[A-Za-z0-9+/=]{16,}" }
+    # Nama kunci bisa muncul dalam beberapa bentuk penulisan:
+    #   encryption.key = 'xxx'              (berkas .env)
+    #   $_ENV['encryption.key'] = 'xxx'     (berkas env.local.php)
+    #   "encKey": "xxx"                     (berkas JSON)
+    # Karena itu di antara nama kunci dan tanda sama dengan diizinkan ada
+    # penutup kutip dan kurung siku. Versi sebelumnya hanya mengizinkan spasi,
+    # dan gara-gara itu melewatkan kunci enkripsi sungguhan yang tertulis di
+    # env.local.php.example.
+    @{ Name = 'encryption key terisi';     Pattern = "(encryption\.key|encKey)['`"\]]*$h[=:]$h[`"']?[A-Za-z0-9+/=]{16,}" }
     @{ Name = 'password FTP/DB literal';   Pattern = "(ftpPass|dbPass)$h[:=]$h[`"'][^`"'$]{4,}" }
     @{ Name = 'isi file sesi PHP';         Pattern = 'user_id\|s:\d+:' }
 )
