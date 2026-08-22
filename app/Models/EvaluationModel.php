@@ -138,12 +138,20 @@ class EvaluationModel extends Model
         $db      = \Config\Database::connect();
         $changed = false;
 
+        // Waktunya diambil dari PHP, bukan lewat NOW() milik basis data. NOW()
+        // hanya ada di MySQL sehingga membuat model ini tidak bisa diuji tanpa
+        // MySQL, dan seluruh timestamp lain di aplikasi ini memang sudah diisi
+        // PHP lewat $useTimestamps - jadi ini justru menyeragamkan sumber waktu.
+        // Pagar anti-timpanya tetap sama, karena yang menjaga adalah kondisi
+        // "IS NULL" di dalam UPDATE, bukan asal nilai waktunya.
+        $sekarang = date('Y-m-d H:i:s');
+
         foreach ($columns as $column) {
             $db->table($this->table)
                 ->where('id', $evaluationId)
                 ->where('employee_id', $employeeId)
                 ->where($column . ' IS NULL', null, false)
-                ->set($column, 'NOW()', false)
+                ->set($column, $sekarang)
                 ->update();
 
             if ($db->affectedRows() > 0) {
