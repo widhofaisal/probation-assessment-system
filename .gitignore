@@ -175,3 +175,12 @@ package-lock.json
 yarn.lock
 
 /.claude
+# Paket serah-terima hasil package-handover.ps1
+/dist/
+
+# Folder writable di dalam web root. Muncul kalau session.savePath diisi path
+# RELATIF (mis. 'writable/session'), karena path relatif dihitung dari direktori
+# kerja PHP yaitu public/. File sesi memuat user_id dan role, jadi tidak boleh
+# ikut ke git maupun ke paket serah-terima. Perbaikan sebenarnya ada di .env:
+# kosongkan session.savePath agar memakai default absolut di luar public/.
+/public/writable/
