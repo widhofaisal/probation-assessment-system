@@ -115,9 +115,22 @@ class ProfileController extends BaseController
             return redirect()->back()->with('error', 'Konfirmasi password tidak cocok');
         }
 
+        // Password baru tidak boleh sama dengan yang lama. Tanpa ini, kewajiban
+        // ganti password bisa dipenuhi dengan mengetik ulang password yang sama
+        // sehingga penandanya hilang tanpa ada yang benar-benar berubah.
+        if (UserModel::verifyPassword($newPassword, $user['password_hash'])) {
+            return redirect()->back()->with('error', 'Password baru harus berbeda dari password saat ini');
+        }
+
         $this->userModel->skipValidation(true)->update($userId, [
-            'password_hash' => UserModel::hashPassword($newPassword),
+            'password_hash'        => UserModel::hashPassword($newPassword),
+            // Pemiliknya sudah memilih passwordnya sendiri, kewajiban ganti selesai.
+            'harus_ganti_password' => 0,
         ]);
+
+        // Sesi ikut diperbarui, kalau tidak AuthFilter akan terus mengalihkan
+        // pengguna ke halaman ini walaupun passwordnya sudah diganti.
+        session()->set('harus_ganti_password', false);
 
         $auditModel = model('AuditLogModel');
         $auditModel->logAction($userId, 'UPDATE', 'users', $userId, null, null, 'User changed own password');

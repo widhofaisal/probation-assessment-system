@@ -151,6 +151,7 @@ class EmployeesController extends BaseController
                 'nama'          => $this->request->getPost('nama'),
                 'email'         => $this->request->getPost('email') ?: null,
                 'password_hash' => UserModel::hashPassword($passwordAwal),
+                'harus_ganti_password' => 1,
                 'role'          => 'probationary-employee',
                 'departemen'    => $this->request->getPost('departemen'),
                 'posisi'        => $this->request->getPost('posisi'),

@@ -16,10 +16,24 @@ use CodeIgniter\HTTP\ResponseInterface;
  */
 class AuthFilter implements FilterInterface
 {
+    /**
+     * Halaman yang tetap boleh dibuka walau pengguna wajib ganti password.
+     *
+     * Tanpa daftar ini, pengguna yang diwajibkan mengganti password akan
+     * dialihkan ke halaman ganti password, lalu halaman itu sendiri ikut
+     * dialihkan lagi - berputar tanpa ujung dan akunnya tidak bisa dipakai
+     * sama sekali. Logout juga harus tetap terbuka sebagai jalan keluar.
+     */
+    public const BEBAS_WAJIB_GANTI = [
+        'profile/change-password',
+        'profile/update-password',
+        'auth/logout',
+    ];
+
     public function before(RequestInterface $request, $arguments = null)
     {
         if (session()->has('user_id')) {
-            return;   // sudah login, lanjutkan
+            return $this->periksaWajibGantiPassword($request);
         }
 
         // Permintaan AJAX butuh status code, bukan halaman login sebagai HTML.
@@ -39,6 +53,47 @@ class AuthFilter implements FilterInterface
 
         return redirect()->to('/auth/login')
             ->with('errorMsg', 'Silakan login terlebih dahulu.');
+    }
+
+    /**
+     * Paksa pengguna mengganti password yang dibuatkan sistem.
+     *
+     * Password awal dan password hasil reset dibuat acak lalu diserahkan HRD
+     * lewat chat atau lisan. Selama belum diganti, password itu diketahui orang
+     * lain dan tersimpan di riwayat percakapan mereka.
+     */
+    private function periksaWajibGantiPassword(RequestInterface $request)
+    {
+        // Penandanya dibaca dari sesi, bukan dari basis data. Filter ini berjalan
+        // di setiap request, jadi membaca tabel users di sini berarti satu query
+        // tambahan untuk setiap halaman yang dibuka - dan membuat lapisan auth
+        // bergantung pada basis data bahkan saat menolak permintaan.
+        //
+        // Nilainya disimpan ke sesi oleh AuthController saat login dan dihapus
+        // oleh ProfileController begitu passwordnya diganti. Sesi lama yang belum
+        // punya kunci ini bernilai null, yang berarti tidak ada kewajiban -
+        // default yang aman.
+        if (empty(session()->get('harus_ganti_password'))) {
+            return;   // tidak ada kewajiban, lanjutkan
+        }
+
+        $jalur = trim($request->getUri()->getPath(), '/');
+        if (in_array($jalur, self::BEBAS_WAJIB_GANTI, true)) {
+            return;
+        }
+
+        if ($request->isAJAX()) {
+            return service('response')
+                ->setStatusCode(ResponseInterface::HTTP_FORBIDDEN)
+                ->setJSON([
+                    'success' => false,
+                    'message' => 'Anda harus mengganti password terlebih dahulu.',
+                ]);
+        }
+
+        return redirect()->to('/profile/change-password')
+            ->with('errorMsg', 'Password Anda masih password yang dibuatkan sistem. '
+                . 'Ganti dulu sebelum memakai aplikasi.');
     }
 
     public function after(RequestInterface $request, ResponseInterface $response, $arguments = null)

@@ -27,10 +27,14 @@ class RoleFilter implements FilterInterface
 
     public function before(RequestInterface $request, $arguments = null)
     {
-        // Belum login: serahkan penanganannya ke AuthFilter agar perilakunya
-        // seragam (arahkan ke halaman login, bukan halaman "akses ditolak").
-        if (!session()->has('user_id')) {
-            return (new AuthFilter())->before($request, $arguments);
+        // Selalu lewati AuthFilter lebih dulu. Sebuah route hanya memakai salah
+        // satu dari 'auth' atau 'role:...', jadi kalau pemeriksaan dasar tidak
+        // dipanggil dari sini, seluruh route ber-role akan melewatkan hal yang
+        // sudah ditangani AuthFilter - yaitu "belum login" dan "wajib ganti
+        // password".
+        $hasil = (new AuthFilter())->before($request, $arguments);
+        if ($hasil !== null) {
+            return $hasil;
         }
 
         $role = session()->get('role');

@@ -11,7 +11,8 @@ class UserModel extends Model
     protected $useAutoIncrement = true;
     protected $returnType = 'array';
     protected $useSoftDeletes = false;
-    protected $allowedFields = ['nik', 'nama', 'email', 'password_hash', 'role', 'departemen', 'posisi',
+    protected $allowedFields = ['nik', 'nama', 'email', 'password_hash', 'harus_ganti_password',
+                                'role', 'departemen', 'posisi',
                                 'jenis_kelamin', 'tanggal_lahir', 'alamat', 'created_at', 'updated_at'];
     protected $useTimestamps = true;
     protected $createdField = 'created_at';

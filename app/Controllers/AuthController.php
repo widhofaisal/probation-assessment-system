@@ -84,6 +84,9 @@ class AuthController extends BaseController
             'role' => $user['role'],
             'departemen' => $user['departemen'],
             'posisi' => $user['posisi'],
+            // Dibaca AuthFilter di tiap request. Disimpan di sesi supaya filter
+            // tidak perlu menanyakannya ke basis data setiap kali.
+            'harus_ganti_password' => (bool) ($user['harus_ganti_password'] ?? false),
         ]);
 
         // Log the login

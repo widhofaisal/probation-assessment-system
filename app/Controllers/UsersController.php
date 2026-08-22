@@ -57,6 +57,9 @@ class UsersController extends BaseController
             'nama'           => $this->request->getPost('nama'),
             'email'          => $this->request->getPost('email') ?: null,
             'password_hash'  => UserModel::hashPassword($passwordAwal),
+            // Password ini dibuat sistem, bukan dipilih pemiliknya - wajib
+            // diganti sebelum akun dipakai.
+            'harus_ganti_password' => 1,
             'role'           => $role,
             'departemen'     => $this->request->getPost('departemen') ?: null,
             'posisi'         => $this->request->getPost('posisi') ?: null,
@@ -130,7 +133,8 @@ class UsersController extends BaseController
         $passwordBaru = UserModel::generatePassword();
 
         $this->userModel->skipValidation(true)->update($id, [
-            'password_hash' => UserModel::hashPassword($passwordBaru),
+            'password_hash'        => UserModel::hashPassword($passwordBaru),
+            'harus_ganti_password' => 1,
         ]);
 
         return $this->response->setJSON([
