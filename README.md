@@ -61,14 +61,49 @@ php spark key:generate
 Perintah ini mengisi `encryption.key` di `.env` dengan nilai acak. Wajib
 dijalankan, dan setiap instalasi harus punya key sendiri.
 
-**4. Import database**
-```bash
-# Buat database terlebih dahulu
-mysql -u root -e "CREATE DATABASE hrd_system CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+**4. Siapkan database** — ada dua jalur, pilih salah satu.
 
-# Import schema & seed data
+```bash
+# Buat database kosong terlebih dahulu
+mysql -u root -e "CREATE DATABASE hrd_system CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+```
+
+**Jalur A — instalasi bersih (disarankan untuk pemakaian sungguhan)**
+
+```bash
+php spark migrate
+```
+
+Membuat seluruh tabel tanpa data apa pun. Karena belum ada akun sama sekali dan
+akun hanya bisa dibuat dari dalam aplikasi oleh HRD, buat akun HRD pertama
+dengan seeder:
+
+```bash
+php spark db:seed AkunHrdPertamaSeeder
+```
+
+Password acak akan ditampilkan sekali di terminal — catat sebelum menutupnya.
+Akun tersebut ditandai wajib ganti password, jadi Anda akan diminta
+menggantinya saat login pertama.
+
+NIK dan nama bisa disesuaikan:
+
+```bash
+HRD_NIK=HRD001 HRD_NAMA="Nama Lengkap" php spark db:seed AkunHrdPertamaSeeder
+```
+
+**Jalur B — dengan data demo (untuk mencoba aplikasi)**
+
+```bash
 mysql -u root hrd_system < database_dump.sql
 ```
+
+Membuat tabel sekaligus mengisi akun dan penilaian contoh. Akun demonya ada di
+[DEMO-ACCOUNTS.md](DEMO-ACCOUNTS.md) dan **wajib dihapus** sebelum sistem dipakai
+dengan data karyawan sungguhan.
+
+> Kedua jalur menghasilkan struktur tabel yang identik — sudah diverifikasi
+> kolom demi kolom beserta seluruh foreign key.
 
 **5. Jalankan server**
 ```bash
@@ -150,6 +185,7 @@ berada di dalam web root dan bisa diakses siapa saja.
 - Password awal akun baru dibuat acak dan hanya ditampilkan sekali.
 - Percobaan login yang gagal dibatasi 5 per NIK dan 30 per IP dalam 15 menit.
 - ID sesi diperbarui setiap kali login berhasil.
+- Password yang dibuatkan sistem wajib diganti pemiliknya sebelum aplikasi bisa dipakai.
 
 Rinciannya di [Kontrol Akses](#kontrol-akses) dan [Sebelum Dipakai Produksi](#sebelum-dipakai-produksi).
 
@@ -260,14 +296,18 @@ penilaian_keputusan → Keputusan HRD atas penilaian ke-2 (kotak "Diisi oleh Dep
 audit_logs          → Log semua aktivitas sistem
 ```
 
-### Aspek Penilaian (10 aspek, nilai 1–10)
+### Aspek Penilaian
 
-| Kategori | Aspek |
-|----------|-------|
-| Kedisiplinan | Ketepatan waktu hadir, Kepatuhan peraturan, Kerapian penampilan |
-| Kinerja | Kecepatan kerja, Kualitas hasil, Kemampuan memenuhi target |
-| Sikap Kerja | Kerjasama tim, Komunikasi dengan atasan, Inisiatif & motivasi |
-| Kompetensi | Penguasaan teknis pekerjaan |
+Nilai tiap butir 1-10. Nilai akhir adalah rata-rata seluruh butir.
+
+| Kategori | Butir Penilaian |
+|---|---|
+| **A. Pengetahuan Akan Tugas (Knowledge)** | - Pengetahuan tentang penggunaan & pemeliharaan perangkat kerja (tools) e.g. mesin, komputer dll.<br>- Mengerti & memahami prosedur kerja standar (SOP) yang harus dijalankan.<br>- Mengerti & memahami standar kualitas kerja yang diterapkan perusahaan.<br>- Mengetahui proses pembuatan sepatu secara umum. |
+| **B. Keahlian Kerja (Technical Skill)** | - Keahlian dalam menjalankan fungsi kerja utama (e.g. cutting, sewing dll.).<br>- Mampu mengoperasikan perangkat kerja (tools) e.g. mesin, kuas, lem dll.<br>- Bekerja sesuai dengan prosedur kerja standar (SOP) dengan benar/secara keseluruhan.<br>- Bekerja secara cepat & teliti sesuai dengan target (kuantitas dan kualitas).<br>- Mampu memenuhi standar kualitas kerja yang diterapkan oleh perusahaan.<br>- Pengelolaan & pemeliharaan perangkat kerja (tools) e.g. mesin, kuas, lem dll. |
+| **C. Sikap Kerja (Attitude)** | - Mampu menjalankan disiplin kerja yang ada di departemen (e.g. jam kerja, seragam, APD dll.).<br>- Memiliki sikap dan perilaku kerja yang sesuai dengan NCOC.<br>- Menunjukkan sikap tidak mudah menyerah dalam menghadapi kesulitan saat bekerja sehari-hari.<br>- Jujur dalam menjalankan tugasnya. |
+| **D. Kemampuan Diri (Interpersonal Skill)** | - Mampu bersosialisasi & bekerja sama dengan rekan kerja yang lain.<br>- Berani mengungkapkan pendapat kepada orang lain, baik rekan kerja ataupun atasan.<br>- Bersedia menerima masukan dan pendapat dari orang lain, baik rekan kerja atau atasan. |
+
+Total 4 kategori, 17 butir penilaian, sesuai formulir penilaian probation yang berlaku.
 
 ---
 
@@ -283,11 +323,23 @@ app/
 │   ├── UsersController.php       # Manajemen user HRD & TL
 │   ├── ReportsController.php     # PDF, CSV, audit trail
 │   └── ProfileController.php     # Profil & ganti password
+├── Filters/
+│   ├── AuthFilter.php            # wajib login + wajib ganti password
+│   └── RoleFilter.php            # pembatasan berdasarkan role
+├── Libraries/
+│   ├── SiklusProbation.php       # aturan jadwal penilaian
+│   ├── RingkasanDashboard.php    # ringkasan angka di dashboard
+│   ├── SuratKeputusan.php        # isi & tata letak SK
+│   ├── PdfCache.php              # cache berkas PDF
+│   ├── KopSurat.php, SkAssets.php
+├── Database/
+│   └── Migrations/               # skema basis data, dijalankan `php spark migrate`
 ├── Models/
 │   ├── UserModel.php
 │   ├── EmployeeModel.php
 │   ├── EvaluationModel.php
 │   ├── EvaluationDetailModel.php
+│   ├── EvaluationDecisionModel.php
 │   └── AuditLogModel.php
 └── Views/
     ├── layouts/        # Layout utama & blank
@@ -299,7 +351,11 @@ app/
     ├── Reports/        # Audit trail & laporan
     └── Profile/        # Profil pengguna
 
-migration_from_postgres.sql   # Schema + seed data
+tests/
+├── feature/         # menembus route & filter
+└── unit/            # aturan yang berdiri sendiri
+
+database_dump.sql    # skema + data demo (jalur instalasi B)
 ```
 
 ---
@@ -354,6 +410,10 @@ Tesnya **tidak membutuhkan database**, jadi bisa langsung dijalankan setelah
 | Berkas | Isi |
 |---|---|
 | [tests/feature/KontrolAksesTest.php](tests/feature/KontrolAksesTest.php) | tamu diarahkan ke login, role salah dikembalikan ke dashboardnya, kelengkapan filter route |
+| [tests/feature/KepemilikanDataTest.php](tests/feature/KepemilikanDataTest.php) | batas kepemilikan data antar pengguna dengan role yang sama |
+| [tests/feature/WajibGantiPasswordTest.php](tests/feature/WajibGantiPasswordTest.php) | penegakan dan jalan keluar kewajiban ganti password |
+| [tests/unit/AturanBisnisTest.php](tests/unit/AturanBisnisTest.php) | masa probation, kesiapan SK, penomoran SK, aspek penilaian |
+| [tests/unit/SuratKeputusanTest.php](tests/unit/SuratKeputusanTest.php) | kelengkapan isi SK dan penulisan tanggal |
 | [tests/unit/PasswordAwalTest.php](tests/unit/PasswordAwalTest.php) | pembuatan password acak dan penyimpanannya sebagai hash |
 | [tests/unit/PembatasanLoginTest.php](tests/unit/PembatasanLoginTest.php) | pembatasan percobaan login |
 | [tests/unit/SiklusProbationTest.php](tests/unit/SiklusProbationTest.php) | aturan jadwal penilaian dan ringkasan dashboard |
@@ -392,4 +452,5 @@ Daftar periksa untuk instalasi dengan data karyawan sungguhan:
 - Password awal user baru dibuat acak dan hanya ditampilkan sekali
 - Soft delete aktif pada tabel `employees`
 - Semua perubahan data dicatat di `audit_logs`
-- Belum ada migration/seeder — skema dibuat dengan mengimpor `database_dump.sql`
+- Skema basis data ada di `app/Database/Migrations/` — jalankan `php spark migrate`
+- Pengguna wajib mengganti password yang dibuatkan sistem sebelum bisa memakai aplikasi
