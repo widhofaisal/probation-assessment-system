@@ -1236,7 +1236,7 @@ p.vrf { font-size:7.5pt; font-style:italic; margin:6px 0 0; }
     public function sk(int $employeeId)
     {
         $role = session()->get('role');
-        if (!in_array($role, ['hrd', 'team-leader', 'probationary-employee'], true)) {
+        if (!in_array($role, ['hrd', 'probationary-employee'], true)) {
             return redirect()->to('/auth/login');
         }
 
@@ -1289,9 +1289,10 @@ p.vrf { font-size:7.5pt; font-style:italic; margin:6px 0 0; }
     /**
      * Siapa yang boleh membuka SK milik seorang Team Member.
      *
-     * Mengikuti aturan pdfAll(): HRD semua, Team Member hanya dirinya sendiri,
-     * dan Team Leader baik yang memegang Team Member itu sekarang maupun yang
-     * dulu menilainya — karena kepemilikan bisa berpindah setelah penilaian.
+     * Beda dengan pdfAll(): SK adalah dokumen keputusan resmi HRD, jadi hanya
+     * HRD dan Team Member yang bersangkutan (dirinya sendiri) yang boleh
+     * membukanya. Team Leader tidak diberi akses sama sekali, walau dia
+     * memegang atau pernah menilai Team Member tersebut.
      */
     private function bolehLihatSk(string $role, array $employee, int $employeeId): bool
     {
@@ -1305,12 +1306,7 @@ p.vrf { font-size:7.5pt; font-style:italic; margin:6px 0 0; }
             return $self && (int) $self['id'] === $employeeId;
         }
 
-        $userId = (int) session()->get('user_id');
-
-        return (int) ($employee['team_leader_id'] ?? 0) === $userId
-            || $this->evaluationModel->where('employee_id', $employeeId)
-                                     ->where('team_leader_id', $userId)
-                                     ->countAllResults() > 0;
+        return false;
     }
 
     /**

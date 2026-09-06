@@ -154,6 +154,13 @@ _modules/*
 /deploy-scripts/_run-sql.js
 /deploy-scripts/_generate-upload-pdf.js
 /deploy-scripts/_read-log.js
+/deploy-scripts/_export-dump.js
+/deploy-scripts/_live_dump.sql
+/deploy-scripts/_seed_demo_extra.sql
+/deploy-scripts/_screenshot_guide.js
+/deploy-scripts/_build_pptx.py
+/deploy-scripts/shots/
+/deploy-scripts/qa_render/
 
 # Database dump (berisi data sensitif)
 database_dump.sql

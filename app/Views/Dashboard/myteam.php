@@ -138,13 +138,6 @@
                                                 <i class="fas fa-file-pdf text-xs"></i> PDF Ke-1
                                             </button>
                                         <?php endif; ?>
-                                        <?php if (!empty($emp['sk_siap'])): ?>
-                                            <a href="/reports/sk/<?= $emp['id'] ?>" target="_blank"
-                                               class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg transition flex items-center gap-1.5"
-                                               title="Surat Keputusan pengangkatan karyawan tetap">
-                                                <i class="fas fa-file-contract text-xs"></i> SK
-                                            </a>
-                                        <?php endif; ?>
                                         <?php if (empty($emp['eval1_id'])): ?>
                                             <span class="text-gray-400 text-xs">Sudah dinilai</span>
                                         <?php endif; ?>

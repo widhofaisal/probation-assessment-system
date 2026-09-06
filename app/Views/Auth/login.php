@@ -74,16 +74,6 @@
                     Login
                 </button>
             </form>
-
-            <!-- Demo hint -->
-            <div class="mt-6 p-4 bg-blue-50 rounded-lg">
-                <p class="text-sm text-blue-800 mb-2"><strong>Demo Accounts:</strong></p>
-                <div class="text-xs text-blue-700 space-y-1">
-                    <p>• HRD: <code class="bg-white px-2 py-1 rounded">HRD001</code> / <code class="bg-white px-2 py-1 rounded">password123</code></p>
-                    <p>• Team Leader: <code class="bg-white px-2 py-1 rounded">TL001</code> / <code class="bg-white px-2 py-1 rounded">password123</code></p>
-                    <p>• Probationary Employee: <code class="bg-white px-2 py-1 rounded">EMP001</code> / <code class="bg-white px-2 py-1 rounded">password123</code></p>
-                </div>
-            </div>
         </div>
     </div>
 </div>
