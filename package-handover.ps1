@@ -153,7 +153,7 @@ $h = '[^\S\r\n]*'
 $secretPatterns = @(
     @{ Name = 'akun hosting InfinityFree'; Pattern = 'if0_\d{4,}' }
     @{ Name = 'host DB showcase';          Pattern = 'sql\d+\.infinityfree\.com' }
-    @{ Name = 'password DB terisi';        Pattern = "database\.default\.password$h=$h\S+" }
+    @{ Name = 'password DB terisi';        Pattern = "database\.default\.password$h=$h(?![A-Z_]+(?:\s|$))\S+" }
     # Nama kunci bisa muncul dalam beberapa bentuk penulisan:
     #   encryption.key = 'xxx'              (berkas .env)
     #   $_ENV['encryption.key'] = 'xxx'     (berkas env.local.php)
